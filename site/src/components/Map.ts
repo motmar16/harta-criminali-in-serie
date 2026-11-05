@@ -191,7 +191,7 @@ function renderPanel(k: Killer, events: Feature<Point, EventProps>[]): string {
     </dl>
     <section>
       <h3>Locations</h3>
-      <p class="note">Individual crime locations are not yet mapped. Area of activity: <strong>${esc(areaNames)}</strong>
+      <p class="note">Individual crime locations are not yet mapped. Area of activity${area.length >= 3 ? ' (shaded on the map)' : ''}: <strong>${esc(areaNames)}</strong>
       <span class="muted">— from ${esc(BASIS_LABEL[areaBasis] ?? areaBasis)}.</span></p>
       <ol class="events">
         ${[...area, ...others].map((e) => `
@@ -217,6 +217,24 @@ function renderPanel(k: Killer, events: Feature<Point, EventProps>[]): string {
       ${k.lists.length ? `<p class="muted small">Listed in: ${esc(k.lists.join('; '))}</p>` : ''}
       <p class="muted small"><a href="mailto:?subject=${encodeURIComponent('Correction: ' + k.names.primary + ' (' + k.id + ')')}">Report an error</a></p>
     </section>`;
+}
+
+// învelitoarea convexă a zonelor de activitate (monotone chain), pentru „aria” unui criminal
+function hull(points: [number, number][]): [number, number][] {
+  const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (pts.length < 3) return pts;
+  const cross = (o: number[], a: number[], b: number[]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower: [number, number][] = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper: [number, number][] = [];
+  for (const p of pts.reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
 }
 
 // ------------------------------------------------------------------ hartă
@@ -309,6 +327,14 @@ export function initKillerMap(container: HTMLElement, panel: HTMLElement): MapAp
       paint: { 'text-color': dark ? '#d7dbe2' : '#2a2d33', 'text-halo-color': halo, 'text-halo-width': 1.4 },
     });
     map.addLayer({
+      id: 'selected-area', type: 'fill', source: 'selected', filter: ['==', ['geometry-type'], 'Polygon'],
+      paint: { 'fill-color': KIND_COLOR.active_area, 'fill-opacity': dark ? 0.16 : 0.12 },
+    });
+    map.addLayer({
+      id: 'selected-area-outline', type: 'line', source: 'selected', filter: ['==', ['geometry-type'], 'Polygon'],
+      paint: { 'line-color': KIND_COLOR.active_area, 'line-width': 1.2, 'line-opacity': 0.55 },
+    });
+    map.addLayer({
       id: 'selected-line', type: 'line', source: 'selected', filter: ['==', ['geometry-type'], 'LineString'],
       paint: { 'line-color': KIND_COLOR.active_area, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.7 },
     });
@@ -383,8 +409,15 @@ export function initKillerMap(container: HTMLElement, panel: HTMLElement): MapAp
     const evs = eventsByKiller!.get(id) ?? [];
     body.innerHTML = renderPanel(k, evs);
     panel.scrollTop = 0;
-    // fără linie între zone: ordinea lor nu e cronologică (linia vine cu evenimentele datate, faza 3)
+    // fără linie între zone: ordinea lor nu e cronologică (linia vine cu evenimentele datate, faza 3).
+    // Cu ≥ 3 zone, aria lor (învelitoarea convexă) arată întinderea geografică a activității.
     const feats: Feature[] = [...evs];
+    const areaPts = evs.filter((e) => e.properties.kind === 'active_area')
+      .map((e) => e.geometry.coordinates as [number, number]);
+    const ring = hull(areaPts);
+    if (ring.length >= 3) {
+      feats.unshift({ type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[...ring, ring[0]]] } });
+    }
     selected = { type: 'FeatureCollection', features: feats };
     (map.getSource('selected') as maplibregl.GeoJSONSource).setData(selected);
     if (evs.length) {
