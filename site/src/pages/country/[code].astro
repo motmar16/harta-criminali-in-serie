@@ -1,0 +1,61 @@
+---
+import Base from '../../layouts/Base.astro';
+import { readData, type CountryRow, type KillerRow } from '../../lib/data';
+
+export function getStaticPaths() {
+  const countries = readData<CountryRow[]>('countries.json');
+  const killers = readData<KillerRow[]>('killers.json');
+  return countries.map((c) => ({
+    params: { code: c.code.toLowerCase() },
+    props: {
+      country: c,
+      people: killers
+        .filter((k) => k.countries.includes(c.code))
+        .map((k) => ({
+          id: k.id, name: k.names.primary, active: k.active, victims: k.victims,
+          legal: k.legal_status, description: k.description, wikipedia: k.links.wikipedia,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, 'en')),
+    },
+  }));
+}
+const { country, people } = Astro.props;
+const LEGAL: Record<string, string> = {
+  convicted: 'convicted', unidentified: 'unidentified', suspected: 'suspected — not convicted',
+  acquitted: 'acquitted', deceased_before_trial: 'died before trial',
+};
+const victims = (v: { proven: number | null; possible: number | null } | null) =>
+  !v || v.proven == null ? '—' : v.possible ? `${v.proven}–${v.possible}` : String(v.proven);
+---
+<Base title={`Serial killers in ${country.name} — Serial Killer Map`}
+      description={`${people.length} documented serial killers active in ${country.name}, with sources.`}>
+  <main class="page">
+    <p><a href="/">← Map</a> · <a href="/country/">All countries</a></p>
+    <h1>{country.name}</h1>
+    <p class="muted">{people.length} documented {people.length === 1 ? 'person' : 'people'} with an area of activity in {country.name}.
+      <a href={`/?c=${country.code}`}>Show on map</a></p>
+    <table>
+      <thead><tr><th>Name</th><th>Active</th><th>Victims</th><th>Legal status</th><th>Sources</th></tr></thead>
+      <tbody>
+        {people.map((p) => (
+          <tr>
+            <td><a href={`/?k=${p.id}`}>{p.name}</a>{p.description && <div class="muted small">{p.description}</div>}</td>
+            <td>{p.active ? (p.active.start === p.active.end ? p.active.start : `${p.active.start}–${p.active.end}`) : '—'}</td>
+            <td>{victims(p.victims)}</td>
+            <td>{p.legal ? LEGAL[p.legal] ?? p.legal : 'not verified'}</td>
+            <td>{p.wikipedia && <a href={p.wikipedia} rel="noopener">Wikipedia</a>} <a href={`https://www.wikidata.org/wiki/${p.id}`} rel="noopener">Wikidata</a></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </main>
+</Base>
+<style>
+  .page { max-width: 1000px; margin: 0 auto; padding: 24px 16px 48px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  @media (max-width: 640px) { th:nth-child(5), td:nth-child(5) { display: none; } }
+</style>

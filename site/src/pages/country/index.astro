@@ -1,0 +1,21 @@
+---
+import Base from '../../layouts/Base.astro';
+import { readData, type CountryRow } from '../../lib/data';
+const countries = readData<CountryRow[]>('countries.json');
+---
+<Base title="Serial killers by country — Serial Killer Map" description="Documented serial killers grouped by the countries where they were active.">
+  <main class="page">
+    <p><a href="/">← Map</a></p>
+    <h1>By country</h1>
+    <p class="muted">Countries where at least one documented person was active (area of activity, not citizenship). {countries.length} countries.</p>
+    <ul class="countries">
+      {countries.map((c) => <li><a href={`/country/${c.code.toLowerCase()}`}>{c.name}</a> <span class="muted">{c.killers}</span></li>)}
+    </ul>
+  </main>
+</Base>
+<style>
+  .page { max-width: 900px; margin: 0 auto; padding: 24px 16px 48px; }
+  .countries { columns: 3 220px; padding-left: 18px; }
+  .countries li { break-inside: avoid; margin: 2px 0; }
+  .muted { color: var(--muted); }
+</style>

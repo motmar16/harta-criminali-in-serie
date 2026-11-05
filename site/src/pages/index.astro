@@ -1,13 +1,52 @@
 ---
 import Base from '../layouts/Base.astro';
+import { readData, type Coverage } from '../lib/data';
+const coverage = readData<Coverage>('coverage.json');
 ---
-<Base title="Serial Killer Map">
-  <div id="map" aria-label="World map"></div>
+<Base title="Serial Killer Map — documented cases worldwide">
+  <header class="topbar">
+    <h1>Serial Killer Map</h1>
+    <p class="muted">
+      {coverage.killers_total.toLocaleString('en')} documented people · data from Wikidata &amp; Wikipedia ·
+      updated {coverage.generated_at} · <a href="/country/">by country</a>
+    </p>
+  </header>
+  <div id="map" aria-label="World map of documented serial killers"></div>
+  <aside id="panel" hidden aria-live="polite">
+    <button class="close" type="button" aria-label="Close panel">×</button>
+    <div class="panel-body"></div>
+  </aside>
 </Base>
-<style>
+<style is:global>
   #map { position: fixed; inset: 0; }
+  .topbar { position: fixed; z-index: 2; top: 10px; left: 10px; max-width: min(560px, calc(100vw - 70px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; box-shadow: 0 1px 6px rgb(0 0 0 / .12); }
+  .topbar h1 { font-size: 17px; margin: 0; letter-spacing: .01em; }
+  .topbar p { margin: 2px 0 0; font-size: 13px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  #panel { position: fixed; z-index: 3; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); overflow-y: auto;
+    background: var(--panel); border-left: 1px solid var(--line); padding: 18px 20px 28px; box-shadow: -2px 0 10px rgb(0 0 0 / .12); }
+  #panel[hidden] { display: none; }
+  #panel .close { position: sticky; top: 0; float: right; font-size: 22px; line-height: 1; border: 0; background: none; color: var(--fg); cursor: pointer; padding: 4px 8px; }
+  #panel h2 { margin: 0 0 4px; font-size: 21px; }
+  #panel h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 20px 0 6px; }
+  #panel .desc { margin: 0; color: var(--muted); }
+  #panel .aliases { margin: 4px 0 0; font-size: 13px; }
+  #panel .legal { display: inline-block; margin: 10px 0 4px; padding: 2px 8px; border-radius: 4px; font-size: 13px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  #panel .legal.warn { background: color-mix(in srgb, #b8860b 22%, transparent); }
+  #panel dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 10px 0 0; }
+  #panel dt { color: var(--muted); }
+  #panel dd { margin: 0; }
+  #panel .events { padding-left: 18px; margin: 6px 0; }
+  #panel .events li { margin: 4px 0; font-size: 14px; }
+  #panel .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
+  #panel .note { font-size: 14px; }
+  #panel .summary { font-size: 14px; }
+  #panel .links { padding-left: 18px; }
+  .maplibregl-popup-content { font: 13px/1.35 system-ui, sans-serif; color: #1d1d1f; }
 </style>
 <script>
-  import { createMap } from '../components/Map';
-  createMap(document.getElementById('map') as HTMLElement);
+  import { initKillerMap } from '../components/Map';
+  initKillerMap(document.getElementById('map') as HTMLElement, document.getElementById('panel') as HTMLElement);
 </script>
