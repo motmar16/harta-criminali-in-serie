@@ -114,8 +114,18 @@ def parse_profile(url: str, page: str) -> dict[str, Any]:
     return rec
 
 
+def mp_type(rec: dict[str, Any]) -> str | None:
+    """Tipul după eticheta Murderpedia: „Serial killer” -> serial_killer, „Spree killer” -> spree_killer."""
+    c = (rec.get("classification") or "").lower()
+    if "serial" in c:
+        return "serial_killer"
+    if "spree" in c:
+        return "spree_killer"
+    return None
+
+
 def is_serial(rec: dict[str, Any]) -> bool:
-    return "serial" in (rec.get("classification") or "").lower()
+    return mp_type(rec) == "serial_killer"
 
 
 def run(refresh: bool = False, limit: int | None = None) -> None:

@@ -30,6 +30,52 @@ COUNTRY_ALIASES = {
     "west germany": "DE", "yugoslavia": "RS", "the bahamas": "BS", "bahamas": "BS", "the philippines": "PH",
 }
 PRECISION_FINE = ("address", "city", "county", "admin1")
+# surse euristice peste care „Location” din Murderpedia (câmp explicit despre locul crimelor) are prioritate
+WEAK_AREA = {"wikipedia-lead", "wikipedia-crime-sections", "wikipedia-body", "wikipedia-list",
+             "wikidata-citizenship", "none", None}
+
+
+def needs_mp_area(k: dict[str, Any], first_area_place: str | None = None, mp_iso: str | None = None,
+                  area_names: list[str] | None = None, mp_location: str | None = None) -> bool:
+    """Murderpedia „Location” înlocuiește zona când aceasta e vagă, vine dintr-o sursă euristică slabă,
+    sau coincide cu locul nașterii fără să vină din infobox (semn că am prins biografia, nu crimele)."""
+    if k["coverage"]["active_area_precision"] not in PRECISION_FINE or k["sources"].get("active_area") in WEAK_AREA:
+        return True
+    # zonă euristică (propoziții) într-o altă țară decât cea din Murderpedia: câștigă Murderpedia
+    if mp_iso and k["sources"].get("active_area") == "wikipedia-crime-sentences" and k["countries"]             and mp_iso not in k["countries"]:
+        return True
+    # rafinare: zona e la nivel de stat, iar Murderpedia numește orașe din același stat
+    # (doar când zona are cel mult 2 state, ca să nu pierdem o arie întinsă din cauza unui singur oraș)
+    if (k["coverage"]["active_area_precision"] == "admin1" and mp_location and area_names
+            and len(area_names) <= 2 and mp_location.count(",") >= 2
+            and any(n and n.lower() in mp_location.lower() for n in area_names)):
+        return True
+    birth = (k.get("birth") or {}).get("place_id")
+    return bool(birth and first_area_place == birth and k["sources"].get("active_area") != "wikipedia-infobox")
+
+
+def replace_area(out: dict[str, Any], k: dict[str, Any], pls: list[dict[str, Any]], source_url: str, basis: str,
+                 conf: float, place_record) -> None:
+    """Înlocuiește punctele `active_area` ale unei persoane (folosit de Murderpedia și de corecturile manuale)."""
+    kid = k["id"]
+    out["features"][:] = [f for f in out["features"]
+                          if not (f["properties"]["killer_id"] == kid and f["properties"]["kind"] == "active_area")]
+    feats = []
+    for i, pl in enumerate(pls, 1):
+        r = place_record(pl)
+        out["places"][r["id"]] = r
+        eid = f"{kid}-a{i:02d}"
+        lat, lon = jitter(r["lat"], r["lon"], eid, r["precision"])
+        feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": {
+            "id": eid, "killer_id": kid, "kind": "active_area", "date": None, "place_id": r["id"],
+            "place_name": r["name"], "precision": r["precision"], "victim_count": None, "victim_label": None,
+            "confidence": conf if r["precision"] != "country" else 0.4, "source_url": source_url,
+            "source_quote": None, "extraction": basis}})
+    out["features"].extend(feats)
+    k["countries"] = list(dict.fromkeys([p["iso2"] for p in pls if p.get("iso2")] or k["countries"]))
+    k["sources"]["active_area"] = basis
+    k["coverage"]["active_area_points"] = len(feats)
+    k["coverage"]["active_area_precision"] = feats[0]["properties"]["precision"] if feats else None
 
 
 def _country_map(countries: list[dict[str, Any]]) -> dict[str, str]:
@@ -148,9 +194,12 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
     ambiguous_rows = []
     stats = Counter()
     for rec in profiles:
-        serial = murderpedia.is_serial(rec)
+        mtype = murderpedia.mp_type(rec)
+        serial = mtype is not None  # eligibil ca persoană nouă: serial sau spree killer
+        rec["_type"] = mtype
         stats["profiles"] += 1
-        stats["serial"] += serial
+        stats["serial"] += mtype == "serial_killer"
+        stats["spree"] += mtype == "spree_killer"
         iso, cname, segs = split_location(rec.get("location"), cmap)
         rec["_iso"], rec["_cname"], rec["_segs"] = iso, cname, segs
         decision = manual.get(rec["url"])
@@ -188,8 +237,15 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
     dedupe.write_ambiguous(ambiguous_rows, manual)
 
     # geocodare „Location” pentru: noi + potriviți fără zonă fină
+    first_place, area_names = {}, {}
+    for f in out["features"]:
+        pr = f["properties"]
+        if pr["kind"] == "active_area":
+            area_names.setdefault(pr["killer_id"], []).append(pr["place_name"])
+            if pr["id"].endswith("-a01"):
+                first_place[pr["killer_id"]] = pr["place_id"]
     need = [r for r in new] + [r for q, r in matched.items()
-                               if by_id[q]["coverage"]["active_area_precision"] not in PRECISION_FINE]
+                               if needs_mp_area(by_id[q], first_place.get(q), r["_iso"], area_names.get(q), r.get("location"))]
     titles = sorted({t for r in need for s in r["_segs"] for t in title_candidates(s, r["_cname"])})
     tq = wp.titles_to_qids("en", titles)
     places = wp.place_info([q for q in tq.values() if q])
@@ -219,36 +275,22 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
         return [p] if wp.usable(p) else []
 
     def set_area(k: dict[str, Any], pls: list[dict[str, Any]], rec: dict[str, Any]) -> None:
-        kid = k["id"]
-        out["features"][:] = [f for f in out["features"]
-                              if not (f["properties"]["killer_id"] == kid and f["properties"]["kind"] == "active_area")]
-        feats = []
-        for i, pl in enumerate(pls, 1):
-            r = place_record(pl)
-            out["places"][r["id"]] = r
-            eid = f"{kid}-a{i:02d}"
-            lat, lon = jitter(r["lat"], r["lon"], eid, r["precision"])
-            feats.append({"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": {
-                "id": eid, "killer_id": kid, "kind": "active_area", "date": None, "place_id": r["id"],
-                "place_name": r["name"], "precision": r["precision"], "victim_count": None, "victim_label": None,
-                "confidence": area_conf if r["precision"] != "country" else 0.4, "source_url": rec["url"],
-                "source_quote": None, "extraction": "murderpedia"}})
-        out["features"].extend(feats)
-        k["countries"] = list(dict.fromkeys([p["iso2"] for p in pls if p.get("iso2")] or k["countries"]))
-        k["sources"]["active_area"] = "murderpedia"
-        k["coverage"]["active_area_points"] = len(feats)
-        k["coverage"]["active_area_precision"] = feats[0]["properties"]["precision"] if feats else None
+        replace_area(out, k, pls, rec["url"], "murderpedia", area_conf, place_record)
 
     def mp_block(rec: dict[str, Any]) -> dict[str, Any]:
-        return {"url": rec["url"], "classification": rec.get("classification"), "method": rec.get("method"),
-                "location": rec.get("location"), "status": rec.get("status"),
-                "characteristics": rec.get("characteristics"), "has_photos": rec.get("has_photos"),
-                "retrieved_at": None}
+        # „Status”, „Characteristics” și „Victim profile” pot conține nume de victime (principiul 6):
+        # se folosesc doar intern (statut juridic, etichete), nu se publică
+        method = rec.get("method")
+        return {"url": rec["url"], "classification": rec.get("classification"),
+                "method": method if method and len(method) <= 100 else None,
+                "location": rec.get("location"), "has_photos": rec.get("has_photos")}
 
     upgraded = 0
     for q, rec in matched.items():
         k = by_id[q]
         k["links"]["murderpedia"] = rec["url"]
+        if rec.get("_type") and rec["_type"] not in k.get("type", []):
+            k["type"] = [*k.get("type", []), rec["_type"]]
         k["murderpedia"] = mp_block(rec)
         if rec.get("classification"):
             k["classification"] = [rec["classification"]]
@@ -269,8 +311,12 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
             k["legal_status"] = legal_from_mp(rec)
             if k["legal_status"]:
                 k["sources"]["legal_status"] = "murderpedia"
-        if k["coverage"]["active_area_precision"] not in PRECISION_FINE:
+        if needs_mp_area(k, first_place.get(q), rec["_iso"], area_names.get(q), rec.get("location")):
             pls = geocode(rec)
+            # nu „rafinăm” spre ceva mai vag: păstrăm Murderpedia doar dacă dă cel puțin la fel de precis
+            prev = k["coverage"]["active_area_precision"]
+            if pls and prev == "admin1" and k["sources"].get("active_area") == "wikipedia-infobox" and                     all(wp.PRECISION[p["kind"]] == "admin1" for p in pls):
+                pls = []
             if pls:
                 set_area(k, pls[:15], rec)
                 upgraded += 1
@@ -287,7 +333,8 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
             "id": kid, "slug": f"{names.slugify(name)}-{kid[3:9]}",
             "names": {"primary": name, "aliases": [], "native": None},
             "description": ", ".join(x for x in [rec.get("classification"), rec["_cname"]] if x) or None,
-            "sex": rec.get("sex"),
+            "sex": None if legal == "unidentified" else rec.get("sex"),
+            "type": [rec["_type"]],
             "birth": {"date": birth["date"], "precision": birth["precision"], "place_id": None} if birth else None,
             "death": None, "countries": [rec["_iso"]] if rec["_iso"] else [],
             "active": {"start": str(min(ys)), "end": str(max(ys))} if ys else None,
@@ -299,7 +346,7 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
             "links": {"wikipedia": None, "wikidata": None, "murderpedia": rec["url"], "killercloud": None,
                       "serialkillersinfo": None},
             "lists": [], "murderpedia": mp_block(rec),
-            "sources": {"identity": "murderpedia", "inclusion": "murderpedia-classification",
+            "sources": {"identity": "murderpedia", "inclusion": f"murderpedia-{rec['_type'].replace('_', '-')}",
                         "victims": "murderpedia" if v else None, "active": "murderpedia" if ys else None,
                         "active_area": None, "legal_status": "murderpedia" if legal else None,
                         "birth_death": "murderpedia" if birth else None, "classification": "murderpedia",
@@ -315,7 +362,20 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
             set_area(k, pls[:15], rec)
         added += 1
 
-    # indexul hărții se reface din killers + primul punct de zonă
+    rebuild_index(out)
+    result = {**stats, "matched_total": len(matched), "new_serial": added, "area_upgraded": upgraded,
+              "ambiguous_pct_of_eligible": round(100 * stats["ambiguous"] / max(stats["serial"] + stats["spree"], 1), 1)}
+    log.info("Murderpedia: %s", result)
+    return result
+
+
+def rebuild_index(out: dict[str, Any]) -> None:
+    """Indexul hărții (un punct per persoană) din killers + primul punct de zonă."""
+    killers = out["killers"]
+    for k in killers:
+        if k["legal_status"] == "unidentified":  # sexul unui autor neidentificat nu e cunoscut
+            k["sex"] = None
+            k["image"] = None
     first_area = {}
     for f in out["features"]:
         p = f["properties"]
@@ -333,8 +393,5 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
             "precision": f["properties"]["precision"], "place": f["properties"]["place_name"],
             "sex": k["sex"], "from": int(per["start"]) if per else None, "to": int(per["end"]) if per else None,
             "m": ",".join(k["method"]), "vt": ",".join(k["victim_types"]), "img": 1 if k["image"] else 0,
+            "type": ",".join(k.get("type") or ["serial_killer"]),
         }})
-    result = {**stats, "matched_total": len(matched), "new_serial": added, "area_upgraded": upgraded,
-              "ambiguous_pct_of_serial": round(100 * stats["ambiguous"] / max(stats["serial"], 1), 1)}
-    log.info("Murderpedia: %s", result)
-    return result

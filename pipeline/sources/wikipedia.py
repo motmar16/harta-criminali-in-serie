@@ -344,6 +344,7 @@ def extract_article(page: dict[str, Any]) -> dict[str, Any]:
         "lead_links": lead_links(wt),
         "crime_links": crime_section_links(wt) if page["lang"] == "en" else [],
         "body_links": crime_section_links(wt, crime=False) if page["lang"] == "en" else [],
+        "crime_sentence_links": crime_sentence_links(wt),
         "categories": categories(wt),
         "summary": first_paragraph(wt) if page["lang"] == "en" else "",
     }
@@ -369,6 +370,35 @@ def run(refresh: bool = False) -> None:
                 people[q] = p
                 added += 1
         log.info("Liste: %d persoane adăugate (oameni fără ocupația serial killer în Wikidata)", added)
+    for p in people.values():
+        p.setdefault("types", ["serial_killer"])
+
+    # verificare încrucișată: arborele de categorii „Serial killers” (engleză)
+    from pipeline.sources import wikipedia_categories
+    cat_members = wikipedia_categories.crawl() if refresh or not wikipedia_categories.load() else wikipedia_categories.load()
+    cq = wp.titles_to_qids("en", list(cat_members))
+    cands = {}
+    for t, info in cat_members.items():
+        q = cq.get(wp.clean_title(t))
+        if q and q not in people:
+            cands[q] = info
+    if cands:
+        details = wikidata.fetch_details(sorted(cands, key=lambda q: int(q[1:])), refresh=refresh)
+        added = cases = 0
+        for q, p in details.items():
+            cat = cands[q]["category"]
+            if "Q5" in p["claims"].get("P31", []):
+                p["origin"], p["types"] = "wikipedia-category", ["serial_killer"]
+                p["category"] = cat
+                people[q] = p
+                added += 1
+            elif "unidentified" in cat.lower():
+                # articol despre un caz cu autor neidentificat (ex. „Highway of Tears”): intră ca neidentificat
+                p["origin"], p["types"], p["category"] = "wikipedia-category-case", ["serial_killer"], cat
+                people[q] = p
+                cases += 1
+        log.info("Categorii Wikipedia: +%d persoane, +%d cazuri cu autor neidentificat", added, cases)
+
     wikidata.save_people(people)
     (RAW / "wikipedia").mkdir(parents=True, exist_ok=True)
     (RAW / "wikipedia" / "list_entries.json").write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
@@ -398,3 +428,46 @@ def load_articles() -> dict[str, dict[str, Any]]:
 
 def load_list_entries() -> list[dict[str, Any]]:
     return json.loads((RAW / "wikipedia" / "list_entries.json").read_text(encoding="utf-8"))
+
+
+# ---------------------------------------------------------------- propoziții despre crime (orice limbă)
+
+CRIME_WORDS = re.compile(
+    r"murder|kill|victim|slain|slew|strangl|stabb|bodies|\bbody\b|crimes?\b|rape|"           # en
+    r"crim[aăe]|omor|ucis|ucide|victim|cadavr|asasin|ucigaș|"                                  # ro
+    r"mord|ermord|getötet|tötete|opfer|leiche|"                                                # de
+    r"meurtr|tué|tua\b|victime|assassin|cadavre|"                                              # fr
+    r"asesin|víctima|vítima|vittim|crimen|omicid|uccis|matou|mató|cadáver|cadavere|"           # es/pt/it
+    r"убий|убил|убив|жертв|труп|преступл|вбив|"                                                # ru/uk
+    r"morderstw|zabił|zamordow|ofiar|zwłok|"                                                   # pl
+    r"gyilkos|meggyilk|áldozat|holttest|vražd|zavraždil|oběť|moord|vermoord|slachtoffer|"      # hu/cs/nl
+    r"mördade|drap|murha|surmasi|uhri|cinayet|öldür|kurban|殺|被害|遺体", re.I)
+BIRTH_WORDS = re.compile(
+    r"\bborn\b|\bnée?\b|născut|geboren|nacid[oa]|naci[óo]|\bnat[oa]\b|nasceu|родил|урожен|urodził|született|"
+    r"narozen|syntyi|doğdu|生まれ|出生|grew up|raised in|crescut|aufgewachsen|childhood|copilări", re.I)
+
+
+def crime_sentence_links(wikitext: str, limit: int = 120) -> list[str]:
+    """Linkurile din propozițiile care vorbesc despre crime (în orice secțiune, orice limbă),
+    fără propozițiile despre naștere/copilărie. Ex.: „Crimele sale s-au desfășurat … în [[București]]”."""
+    body = re.split(r"^==\s*(?:See also|References|Notes|External links|Further reading|Bibliography|"
+                    r"Vezi și|Note|Referințe|Bibliografie|Legături externe|Siehe auch|Einzelnachweise|Literatur|"
+                    r"Weblinks|Voir aussi|Notes et références|Références|Liens externes|Véase también|Referencias|"
+                    r"Enlaces externos|См\. также|Примечания|Ссылки|Литература)\s*==", wikitext, flags=re.M | re.I)[0]
+    code = mw.parse(body)
+    for node in code.filter_templates(recursive=False) + code.filter_tags(recursive=False):
+        if isinstance(node, mw.nodes.Tag) and str(node.tag).lower() not in ("ref",):
+            continue
+        try:
+            code.remove(node)
+        except ValueError:
+            pass
+    text = re.sub(r"<ref[^>]*/>|<ref[^>]*>.*?</ref>", " ", str(code), flags=re.S | re.I)
+    text = re.sub(r"^=+.*?=+\s*$", " ", text, flags=re.M)
+    out: list[str] = []
+    for sent in re.split(r"(?<=[.!?。])\s+|\n\n+", text):
+        if CRIME_WORDS.search(sent) and not BIRTH_WORDS.search(sent):
+            out += _links(mw.parse(sent))
+        if len(out) >= limit:
+            break
+    return out[:limit]

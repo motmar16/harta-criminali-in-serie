@@ -1,9 +1,9 @@
 {
   "generated_at": "2026-11-05",
-  "killers_total": 2106,
+  "killers_total": 2966,
   "sources": {
-    "wikidata_sparql_items": 1299,
-    "added_from_wikipedia_lists": 807,
+    "wikidata_sparql_items": 1378,
+    "added_from_wikipedia_lists": 800,
     "wikipedia_list_entries": 3605,
     "wikipedia_list_unique_titles": 1903,
     "wikipedia_list_titles_with_qid": 1902,
@@ -20,49 +20,85 @@
     ]
   },
   "articles": {
-    "with_any_wikipedia_article": 2068,
-    "with_english_article": 1984
+    "with_any_wikipedia_article": 2628,
+    "with_english_article": 2542
   },
   "active_area": {
-    "with_any_point": 2087,
-    "at_admin1_or_finer": 1943,
-    "pct_at_admin1_or_finer": 92.3,
+    "with_any_point": 2938,
+    "at_admin1_or_finer": 2789,
+    "pct_at_admin1_or_finer": 94.0,
     "by_precision": {
-      "admin1": 1404,
-      "city": 539,
-      "country": 144,
-      "none": 19
+      "admin1": 1480,
+      "city": 1309,
+      "country": 149,
+      "none": 28
     },
     "by_basis": {
-      "wikipedia-infobox": 1500,
-      "wikipedia-lead": 363,
-      "wikipedia-crime-sections": 113,
-      "wikipedia-body": 52,
-      "wikidata-citizenship": 48,
-      "none": 19,
-      "wikipedia-list": 11
+      "wikipedia-infobox": 1543,
+      "murderpedia": 704,
+      "wikipedia-crime-sentences": 506,
+      "wikipedia-lead": 89,
+      "wikidata-citizenship": 44,
+      "wikipedia-body": 29,
+      "wikipedia-crime-sections": 22,
+      "none": 21,
+      "null": 7,
+      "wikipedia-list": 1
     }
   },
-  "birth_place_geocoded": 1184,
-  "death_place_geocoded": 699,
+  "birth_place_geocoded": 1388,
+  "death_place_geocoded": 838,
   "legal_status": {
-    "convicted": 1835,
-    "undetermined": 211,
-    "suspected": 31,
-    "unidentified": 26,
-    "acquitted": 3
+    "convicted": 2497,
+    "undetermined": 227,
+    "unidentified": 132,
+    "suspected": 53,
+    "deceased_before_trial": 43,
+    "acquitted": 14
   },
-  "with_victim_count": 1780,
-  "countries_with_killers": 111,
+  "with_victim_count": 2630,
+  "countries_with_killers": 117,
   "events": {
-    "active_area": 3589,
-    "birth": 1184,
-    "death": 699
+    "active_area": 5095,
+    "birth": 1388,
+    "death": 838
   },
   "events_layer3_murders": 0,
-  "places": 2672,
+  "places": 3613,
+  "with_murderpedia_link": 1358,
+  "by_inclusion": {
+    "wikidata-occupation": 1378,
+    "wikipedia-list": 800,
+    "wikipedia-category": 432,
+    "murderpedia-serial-killer": 212,
+    "murderpedia-spree-killer": 79,
+    "wikipedia-category-case": 65
+  },
+  "with_photo": 523,
+  "with_method": 1289,
+  "with_victim_types": 2171,
   "not_yet_included": [
-    "Murderpedia (faza 2)",
     "locațiile individuale ale crimelor (faza 3)"
-  ]
+  ],
+  "murderpedia": {
+    "profiles": 6886,
+    "serial": 852,
+    "spree": 150,
+    "matched_serial": 709,
+    "matched_nonserial": 363,
+    "ambiguous": 2,
+    "matched_total": 1067,
+    "new_serial": 291,
+    "area_upgraded": 420,
+    "ambiguous_pct_of_eligible": 0.2
+  },
+  "location_qa": {
+    "sursa_slaba": 54,
+    "zona_egala_cu_nasterea": 112,
+    "doar_tara": 149,
+    "fara_locatie": 28,
+    "tara_difera_de_murderpedia": 1,
+    "randuri": 341,
+    "manual_corrections_applied": 0
+  }
 }

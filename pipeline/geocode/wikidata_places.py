@@ -37,10 +37,12 @@ CLASSES = {
     "Q6256": "country",        # country
     "Q3624078": "country",     # sovereign state
     "Q3024240": "country",     # historical country
+    "Q236036": "country",      # republică unională sovietică (RSFSR etc.): prea mare pentru „admin1”
     "Q1620908": "region",      # historical region
     "Q82794": "region",        # geographic region
     "Q43229": "org",           # organization (doar ca filtru negativ)
 }
+SOCIALIST_REPUBLIC = re.compile(r"Soviet (?:Federative )?Socialist Republic|^Socialist (?:Federal )?Republic of", re.I)
 KIND_ORDER = ["settlement", "structure", "admin2", "admin1", "admin_other", "country", "region"]
 PRECISION = {"settlement": "city", "structure": "address", "admin2": "county", "admin1": "admin1",
              "admin_other": "admin1", "region": "admin1", "country": "country"}
@@ -173,7 +175,12 @@ def place_info(qids: Iterable[str], refresh: bool = False) -> dict[str, dict[str
         row = con.execute("SELECT qid,label,lat,lon,country_qid,iso2,kind,retrieved_at FROM place WHERE qid=?",
                           (q,)).fetchone()
         if row:
-            out[q] = dict(zip(["qid", "label", "lat", "lon", "country_qid", "iso2", "kind", "retrieved_at"], row))
+            p = dict(zip(["qid", "label", "lat", "lon", "country_qid", "iso2", "kind", "retrieved_at"], row))
+            # republicile unionale sovietice / iugoslave sunt clasificate inconsecvent în Wikidata
+            # („federated state”); ca suprafață sunt țări, deci nu pot fi „zonă” la nivel admin1
+            if p["kind"] in ("admin1", "admin_other", "region") and SOCIALIST_REPUBLIC.search(p["label"] or ""):
+                p["kind"] = "country"
+            out[q] = p
     return out
 
 
@@ -195,8 +202,11 @@ def _place_bindings(batch: list[str], cls_values: str, refresh: bool) -> tuple[l
 
 
 def usable(p: dict[str, Any] | None) -> bool:
-    """Loc folosibil pe hartă: are coordonate și un tip geografic cunoscut."""
-    return bool(p and p.get("kind") and p.get("lat") is not None)
+    """Loc folosibil pe hartă: are coordonate, un tip geografic cunoscut și (sub nivel de țară) o țară.
+    Fără țară rămân continente, oceane, regiuni transnaționale („North America”) — prea vagi."""
+    if not (p and p.get("kind") and p.get("lat") is not None):
+        return False
+    return p["kind"] == "country" or bool(p.get("country_qid"))
 
 
 def precision(p: dict[str, Any]) -> str:

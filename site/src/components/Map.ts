@@ -24,6 +24,7 @@ export interface Killer {
   names: { primary: string; aliases: string[] };
   description: string | null;
   sex: string | null;
+  type?: string[];
   birth: { date: string | null; place_id: string | null } | null;
   death: { date: string | null; place_id: string | null; cause: string | null } | null;
   countries: string[];
@@ -40,13 +41,13 @@ export interface Killer {
   links: Record<string, string | null>;
   lists: string[];
   sources: Record<string, string | null>;
-  murderpedia?: { url: string; classification: string | null; method: string | null; location: string | null; status: string | null } | null;
+  murderpedia?: { url: string; classification: string | null; method: string | null; location: string | null } | null;
 }
 
 type IndexProps = {
   id: string; slug: string; name: string; countries: string; victims: number | null; legal: string | null;
   precision: string; place: string; sex: string | null; from: number | null; to: number | null;
-  m: string; vt: string; img: 0 | 1;
+  m: string; vt: string; img: 0 | 1; type: string;
 };
 type EventProps = {
   id: string; killer_id: string; kind: string; place_name: string; precision: string;
@@ -55,6 +56,7 @@ type EventProps = {
 
 export interface Filters {
   q: string;
+  type: '' | 'serial_killer' | 'spree_killer';
   sex: '' | 'male' | 'female';
   from: number | null;
   to: number | null;
@@ -80,6 +82,7 @@ const PRECISION_LABEL: Record<string, string> = {
 const BASIS_LABEL: Record<string, string> = {
   'wikipedia-infobox': 'Wikipedia infobox',
   'wikipedia-lead': 'places linked in the Wikipedia introduction',
+  'wikipedia-crime-sentences': 'places linked in sentences about the crimes (Wikipedia)',
   'wikipedia-crime-sections': 'places linked in the crimes section of the Wikipedia article',
   'wikipedia-body': 'places linked in the Wikipedia article',
   'wikipedia-list': 'Wikipedia list of serial killers (country only)',
@@ -98,6 +101,7 @@ export const LEGAL_LABEL: Record<string, string> = {
 
 // culori stabile în ambele teme
 const SEX_COLOR = { male: '#4f7cac', female: '#d08a2e', other: '#8b8f98' };
+const SPREE_COLOR = '#8e4fb3';
 const KIND_COLOR: Record<string, string> = { active_area: '#c0563b', birth: '#3f8f7a', death: '#7a7f8c' };
 
 // ------------------------------------------------------------------ date
@@ -126,6 +130,7 @@ async function loadDetails(): Promise<void> {
 export function matches(p: IndexProps, f: Filters): boolean {
   if (f.q && !p.name.toLowerCase().includes(f.q.toLowerCase())) return false;
   if (f.sex && p.sex !== f.sex) return false;
+  if (f.type && !(p.type || 'serial_killer').split(',').includes(f.type)) return false;
   if (f.from != null && (p.to ?? p.from ?? -1e9) < f.from) return false;
   if (f.to != null && (p.from ?? p.to ?? 1e9) > f.to) return false;
   if (f.minVictims > 0 && (p.victims ?? 0) < f.minVictims) return false;
@@ -183,14 +188,15 @@ function renderPanel(k: Killer, events: Feature<Point, EventProps>[]): string {
       ${row('Active', k.active ? `${esc(k.active.start)}${k.active.end !== k.active.start ? '–' + esc(k.active.end) : ''}` : '')}
       ${row('Victims', k.victims ? `<strong>${esc(fmtVictims(k.victims))}</strong>${showNote ? ` <span class="muted">“${esc(k.victims!.note)}”</span>` : ''}` : '')}
       ${row('Countries', k.countries.map((c) => `<a href="/country/${esc(c.toLowerCase())}">${esc(c)}</a>`).join(', '))}
+      ${row('Type', (k.type ?? ['serial_killer']).map((t) => t === 'spree_killer' ? 'Spree killer' : 'Serial killer').join(', '))}
       ${row('Classification', k.classification?.length ? esc(k.classification.join(', ')) + ' <span class="muted small">(Murderpedia)</span>' : '')}
       ${row('Method', tags(k.method))}
       ${row('Victims were', tags(k.victim_types))}
       ${row('Penalty', k.penalty ? esc(k.penalty) : '')}
-      ${row('Status', !k.penalty && mp?.status ? esc(mp.status) + ' <span class="muted small">(Murderpedia)</span>' : '')}
     </dl>
     <section>
       <h3>Locations</h3>
+      ${area[0]?.properties.precision === 'country' ? '<p class="note warnline">Only the country is known; the dot is placed near its centre, not at the crime scenes.</p>' : ''}
       <p class="note">Individual crime locations are not yet mapped. Area of activity${area.length >= 3 ? ' (shaded on the map)' : ''}: <strong>${esc(areaNames)}</strong>
       <span class="muted">— from ${esc(BASIS_LABEL[areaBasis] ?? areaBasis)}.</span></p>
       <ol class="events">
@@ -315,9 +321,11 @@ export function initKillerMap(container: HTMLElement, panel: HTMLElement): MapAp
           2, ['match', ['get', 'precision'], 'country', 10, 'admin1', 9, 8],
           8, ['match', ['get', 'precision'], 'country', 14, 'admin1', 12, 11]],
         'circle-color': ['case', hollow, halo, sexColor],
-        'circle-opacity': ['match', ['get', 'precision'], 'country', 0.55, 'admin1', 0.75, 0.95],
-        'circle-stroke-color': ['case', hollow, sexColor, halo],
-        'circle-stroke-width': ['case', hollow, 3, 1.5],
+        'circle-opacity': ['match', ['get', 'precision'], 'country', 0.35, 'admin1', 0.75, 0.95],
+        // spree killers: contur violet gros; suspecți/neverificați: inel gol în culoarea sexului
+        'circle-stroke-color': ['case', ['in', 'spree', ['coalesce', ['get', 'type'], '']], SPREE_COLOR,
+          hollow, sexColor, halo],
+        'circle-stroke-width': ['case', ['in', 'spree', ['coalesce', ['get', 'type'], '']], 3.5, hollow, 3, 1.5],
       },
     });
     map.addLayer({
@@ -390,7 +398,7 @@ export function initKillerMap(container: HTMLElement, panel: HTMLElement): MapAp
     if (!p) return;
     const years = p.from ? ` · ${p.from}${p.to && p.to !== p.from ? '–' + p.to : ''}` : '';
     popup.setLngLat(e.lngLat)
-      .setHTML(`<strong>${esc(p.name)}</strong><span>${esc(p.place)}${esc(years)}</span>`)
+      .setHTML(`<strong>${esc(p.name)}</strong><span>${esc(p.place)}${p.precision === 'country' ? ' · country only, exact area unknown' : ''}${esc(years)}</span>`)
       .addTo(map);
   });
   map.on('mouseleave', 'killer-points', () => popup.remove());

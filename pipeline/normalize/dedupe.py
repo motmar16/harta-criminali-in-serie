@@ -91,8 +91,11 @@ class Matcher:
             if by and kby and abs(by - kby) > 1:
                 continue
             year_ok = bool(by and kby)
-            country_ok = not mp_iso or not k["countries"] or mp_iso in k["countries"]
-            if not country_ok and not year_ok:
+            # țara trebuie să fie compatibilă (URSS / Iugoslavia sunt compatibile cu statele succesoare)
+            # țările din zone euristice (propoziții, introducere) pot fi greșite; contează doar infobox/manual
+            kc = k["countries"] if k["sources"].get("active_area") in ("wikipedia-infobox", "manual") else []
+            country_ok = (not mp_iso or not kc or mp_iso in kc or bool({mp_iso, *kc} & {"SU", "YU"}))
+            if not country_ok:
                 continue
             out.append((int(score), kid, year_ok))
         return sorted(out, reverse=True)

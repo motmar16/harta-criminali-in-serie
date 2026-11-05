@@ -2,7 +2,19 @@
 
 Document de lucru; devine pagina publică „Methodology” în faza 4.
 
-## Cine e inclus (faza 1)
+## Cine e inclus
+
+Două tipuri: **criminali în serie** și **spree killers** (crime în locuri diferite într-un interval scurt, fără
+pauză de „răcire”). Câmpul `type` le distinge; harta are filtru separat.
+
+- Wikidata: oameni cu ocupația/clasa „serial killer” (Q484188) sau „spree killer” (Q1154323).
+- Arborele de categorii Wikipedia engleză „Serial killers” (verificare încrucișată): paginile aflate direct în
+  categorii „… serial killers …”. Oamenii intră direct; articolele despre cazuri din categoriile „Unidentified …
+  serial killers” intră ca **autor neidentificat** (ex. „Highway of Tears”). Categoria „Spree killers” nu mai
+  există pe Wikipedia engleză.
+- Murderpedia: profilurile etichetate „Serial killer” sau „Spree killer” (vezi mai jos).
+
+### Faza 1 (detalii)
 
 - Persoanele umane (P31 = Q5) din Wikidata cu ocupația „serial killer” (P106 = Q484188) sau instanță a unei subclase
   a lui Q484188. Personajele fictive și grupurile (duo-uri, bande) nu sunt incluse.
@@ -23,10 +35,17 @@ Derivat conservator; când nu se poate stabili, rămâne `null` și site-ul afi�
 
 ## Zona de activitate (stratul 1, `active_area`)
 
+Ținta: punctul de pe hartă să fie în aria în care au avut loc crimele, nu la locul nașterii sau al detenției.
 Se ia primul nivel care dă cel puțin un loc rezolvat:
+0. **corectură manuală** din `data/validare/locatii_corectii.csv` (are prioritate maximă).
 1. **infobox Wikipedia engleză**, câmpurile fine `locations`, `location`, `cities`, `city`, `states`, `state`, `region`
    (încredere 0,9). Locurile la nivel de țară din aceste câmpuri se ignoră (ex. „Georgia” într-o listă de state SUA
    s-ar rezolva greșit la țara Georgia).
+1b. **propozițiile despre crime, în orice limbă și orice secțiune**: linkurile de locuri din propozițiile care conțin
+   cuvinte despre crime (murder/killed/victim, crimă/omor/ucis/victimă, Mord/Opfer, meurtre/victime, убий/жертв…),
+   excluzând propozițiile despre naștere/copilărie; cele mai frecvente 5 locuri (încredere 0,7).
+   Ex.: „Crimele sale s-au desfășurat cu precădere în [[București]]” -> București.
+1c. **„Location” din Murderpedia**, dacă există și sursele de mai jos sunt singurele disponibile.
 2. **linkurile geografice din introducerea articolului** (engleză, altfel prima limbă disponibilă), fără ce e
    între paranteze, unde multe Wikipedii pun locul nașterii/morții (încredere 0,6).
 3. **linkurile din secțiunile despre crime** ale articolului englez (titluri cu „Murders”, „Crimes”, „Victims”,
@@ -68,6 +87,8 @@ URL-ul și un indicator că există galerie foto. Narațiunea, articolele de pre
 - **Deduplicare:** nume normalizat (rapidfuzz) + an naștere ± 1 + țară. Cazurile neclare merg în
   `data/validare/dedupe_ambigue.csv`; o decizie scrisă în coloana `decizie` (QID, „nou” sau „diferit”) e respectată
   la rularea următoare.
+- **„Status” și „Characteristics” nu se publică** (conțin uneori nume de victime): servesc doar la statutul juridic și
+  la etichete. Se publică clasificarea, metoda (dacă e scurtă) și locația.
 - **„Victim profile” nu se publică** (poate conține nume de victime care nu apar în Wikipedia). Din el se derivă doar
   etichete de tip: femei, bărbați, copii (toate vârstele < 16), vârstnici (toate ≥ 65), familie, pacienți etc.
 - **Locația** („Yonkers, Westchester County, New York, USA”) se rezolvă tot prin Wikipedia/Wikidata, încercând titluri
@@ -78,7 +99,7 @@ Precedență per câmp:
 |---|---|
 | victime | Wikidata P1345 → infobox Wikipedia → Murderpedia |
 | perioadă activă | infobox Wikipedia → anii din „Date of murder” (Murderpedia) |
-| zonă de activitate | Wikipedia dacă e la nivel ≤ admin1; altfel Murderpedia „Location”; altfel țara |
+| zonă de activitate | corectură manuală → infobox → propoziții despre crime → Murderpedia „Location” → introducere / secțiuni / corp → țară |
 | clasificare | Murderpedia |
 | metodă, tip victime | reuniunea etichetelor din Wikipedia și Murderpedia |
 | statut juridic | Wikidata/Wikipedia; dacă lipsește, din „Status” (Murderpedia) |
@@ -98,3 +119,15 @@ din cuvinte-cheie, deci sunt incomplete și pot avea erori; site-ul o spune expl
 
 Baza Radford/FGCU nu are pagini publice per persoană; site-ul pune doar un link general către descrierea proiectului.
 Datele pot fi cerute prin email (șablon în PLAN, Anexa B) și, dacă vin, se folosesc doar pentru verificare și statistici.
+
+## Autori neidentificați
+
+Sexul nu este cunoscut, chiar dacă Wikidata are o valoare (ex. Jack the Ripper apare acolo ca „male”): pe site apar
+gri, cu „Unknown”, și nu sunt incluși la filtrul Male/Female. Nu au poză.
+
+## Control de calitate al locațiilor
+
+La fiecare build se scrie `data/validare/locatii_de_verificat.csv` cu motivul pentru fiecare caz suspect:
+`doar_tara`, `fara_locatie`, `zona_egala_cu_nasterea`, `sursa_slaba`, `difera_de_murderpedia`. Corecturile se scriu
+în `data/validare/locatii_corectii.csv` (`id`, `locuri` = titluri Wikipedia engleză separate prin „;”, `nota`).
+Punctele „doar țară” sunt desenate mare și estompat și marcate în fișă ca „country only”: nu indică un oraș.

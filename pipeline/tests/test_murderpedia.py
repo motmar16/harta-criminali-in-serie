@@ -49,9 +49,9 @@ def test_mp_derived_fields():
 
 def test_dedupe_decisions():
     killers = [
-        {"id": "Q1", "names": {"primary": "Ralph Andrews", "aliases": []}, "birth": {"date": "1945-01-01"}, "countries": ["US"]},
-        {"id": "Q2", "names": {"primary": "John Smith", "aliases": []}, "birth": {"date": "1901"}, "countries": ["GB"]},
-        {"id": "Q3", "names": {"primary": "John Smith", "aliases": []}, "birth": None, "countries": ["US"]},
+        {"id": "Q1", "names": {"primary": "Ralph Andrews", "aliases": []}, "birth": {"date": "1945-01-01"}, "countries": ["US"], "sources": {"active_area": "wikipedia-infobox"}},
+        {"id": "Q2", "names": {"primary": "John Smith", "aliases": []}, "birth": {"date": "1901"}, "countries": ["GB"], "sources": {"active_area": "wikipedia-infobox"}},
+        {"id": "Q3", "names": {"primary": "John Smith", "aliases": []}, "birth": None, "countries": ["US"], "sources": {"active_area": "wikipedia-infobox"}},
     ]
     mt = dedupe.Matcher(killers, {})
     rec = {"title": "Ralph Raymond Andrews | Murderpedia", "index_name": "Ralph Raymond ANDREWS", "date_of_birth": "1945"}

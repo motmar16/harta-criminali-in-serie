@@ -56,7 +56,8 @@ def collect(refresh: bool = False) -> dict[str, Any]:
             if v:
                 titles.setdefault(lang, set()).update(v["titles"] + v["text"])
         titles.setdefault(lang, set()).update(a["lead_links"])
-        titles.setdefault(lang, set()).update(a.get("crime_links", []) + a.get("body_links", []))
+        titles.setdefault(lang, set()).update(a.get("crime_links", []) + a.get("body_links", [])
+                                              + a.get("crime_sentence_links", []))
     for e in entries:
         titles.setdefault("en", set()).update(n for n in e["country_names"] if not n.startswith("code:"))
     title_qid: dict[str, dict[str, str | None]] = {}
@@ -139,6 +140,22 @@ def _active_area(ctx: dict[str, Any], person: dict[str, Any], article: dict[str,
         if fine:
             return fine[:MAX_AREA_POINTS], "wikipedia-infobox", article["source_url"]
 
+    # 1b. linkurile din propozițiile despre crime (orice limbă, orice secțiune); cele mai frecvente, maxim 5
+    if article and article.get("crime_sentence_links"):
+        m = ctx["title_qid"].get(article["lang"], {})
+        counts: Counter[str] = Counter()
+        found: dict[str, dict[str, Any]] = {}
+        for t in article["crime_sentence_links"]:
+            pq = m.get(wp.clean_title(t))
+            pl = ctx["places"].get(pq) if pq else None
+            if wp.usable(pl) and pl["kind"] not in ("country", "structure") and consistent(pl):
+                counts[pl["qid"]] += 1
+                found.setdefault(pl["qid"], pl)
+        if counts:
+            order = list(found)
+            top = _dominant_country(sorted(found, key=lambda q: (-counts[q], order.index(q))), found)[:5]
+            return [found[q] for q in top], "wikipedia-crime-sentences", article["source_url"]
+
     # 2. linkurile geografice din introducere
     if article:
         lead = [p for p in _resolve(ctx, article["lang"], article["lead_links"])
@@ -159,7 +176,7 @@ def _active_area(ctx: dict[str, Any], person: dict[str, Any], article: dict[str,
                     found.setdefault(pl["qid"], pl)
             if counts:
                 order = list(found)
-                top = sorted(found, key=lambda q: (-counts[q], order.index(q)))[:5]
+                top = _dominant_country(sorted(found, key=lambda q: (-counts[q], order.index(q))), found)[:5]
                 return [found[q] for q in top], how, article["source_url"]
         if not country_places:
             lead_c = [p for p in _resolve(ctx, article["lang"], article["lead_links"]) if p["kind"] == "country"]
@@ -192,14 +209,25 @@ def _active_area(ctx: dict[str, Any], person: dict[str, Any], article: dict[str,
     return country_places[:5], basis_country or "none", src_country
 
 
+def _dominant_country(ranked: list[str], found: dict[str, dict[str, Any]]) -> list[str]:
+    """Păstrează doar locurile din țara celui mai menționat loc. Textele enumeră uneori cazuri similare
+    din alte țări; zona unei persoane e rareori împrăștiată pe mai multe continente."""
+    if not ranked:
+        return ranked
+    iso = found[ranked[0]].get("iso2")
+    return [q for q in ranked if not iso or found[q].get("iso2") in (iso, None)]
+
+
 def _legal_status(person: dict[str, Any], article: dict[str, Any] | None,
                   list_entries: list[dict[str, Any]]) -> str | None:
+    if person.get("origin") == "wikipedia-category-case":
+        return "unidentified"
     cats = " | ".join(article["categories"]).lower() if article else ""
     ib = article["infobox"] if article else {}
     convicted = bool(person["claims"].get("P1399")) or any(
         ib.get(k) for k in ("convictions", "conviction", "criminal_penalty", "penalty"))
     convicted = convicted or "people convicted of murder" in cats or "convicted" in cats
-    if "unidentified serial killers" in cats:
+    if re.search(r"unidentified [^|]*(?:serial killers|murderers|killers)", cats) or             "unidentified" in (person.get("category") or "").lower():
         return "unidentified"
     if convicted:
         return "convicted"
@@ -277,7 +305,7 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
             props = {"id": eid, "killer_id": q, "kind": kind, "date": date, "place_id": rec["id"],
                      "place_name": rec["name"], "precision": rec["precision"], "victim_count": None,
                      "victim_label": None, "confidence": 1.0 if how.startswith("wikidata-P") else
-                     {"wikipedia-infobox": 0.9, "wikipedia-lead": 0.6, "wikipedia-crime-sections": 0.5,
+                     {"wikipedia-infobox": 0.9, "wikipedia-crime-sentences": 0.7, "wikipedia-lead": 0.6, "wikipedia-crime-sections": 0.5,
                       "wikipedia-body": 0.4}.get(how, 0.3),
                      "source_url": src, "source_quote": None, "extraction": how}
             feat = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
@@ -288,6 +316,8 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
         period = dates.active_period(ib.get("begin_year") or ib.get("beginyear"),
                                      ib.get("end_year") or ib.get("endyear"), ib.get("years_active"))
         legal = _legal_status(p, art, lentries)
+        if not legal and "suspected" in (p.get("category") or "").lower():
+            legal = "suspected"
         hints = categories.wiki_category_hints(art["categories"]) if art else ""
         desc = (c.get("description") or [None])[0]
         meth = categories.methods(hints, ib.get("weapons"))
@@ -307,7 +337,9 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
             "slug": slug,
             "names": {"primary": name, "aliases": (c.get("alias") or [])[:6], "native": None},
             "description": (c.get("description") or [None])[0],
-            "sex": next((SEX[s] for s in c.get("P21", []) if s in SEX), None),
+            # la autorii neidentificați sexul nu e cunoscut, chiar dacă Wikidata are o valoare (ex. „male”)
+            "sex": None if legal == "unidentified" else next((SEX[s] for s in c.get("P21", []) if s in SEX), None),
+            "type": p.get("types") or ["serial_killer"],
             "birth": {"date": birth_t["date"] if birth_t else None,
                       "precision": birth_t["precision"] if birth_t else None,
                       "place_id": f"P-{pob['qid']}" if wp.usable(pob) else None} if (birth_t or wp.usable(pob)) else None,
@@ -334,7 +366,9 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
             "lists": sorted({e["list"] for e in lentries}),
             "sources": {
                 "identity": "wikidata",
-                "inclusion": "wikidata-occupation" if p.get("origin") == "wikidata-sparql" else "wikipedia-list",
+                "inclusion": {"wikidata-sparql": "wikidata-occupation", "wikipedia-list": "wikipedia-list",
+                              "wikipedia-category": "wikipedia-category",
+                              "wikipedia-category-case": "wikipedia-category-case"}.get(p.get("origin"), p.get("origin")),
                 "victims": victims["source"] if victims else None,
                 "method_victim_types": "keywords: wikipedia-categories+infobox" if (meth or vtypes) else None,
                 "image": "wikimedia-commons" if image else None,
@@ -357,6 +391,7 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
                 "sex": killer["sex"], "from": int(period["start"]) if period else None,
                 "to": int(period["end"]) if period else None,
                 "m": ",".join(meth), "vt": ",".join(vtypes), "img": 1 if image else 0,
+                "type": ",".join(killer["type"]),
             }})
     return {"killers": killers, "features": features, "index": index, "places": used_places}
 
@@ -407,6 +442,27 @@ def coverage(ctx: dict[str, Any], out: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _apply_corrections(out: dict[str, Any]) -> int:
+    """Corecturi manuale de locație din data/validare/locatii_corectii.csv (au prioritate maximă)."""
+    from pipeline.build import murderpedia_merge, qa
+    fixes = qa.load_corrections()
+    if not fixes:
+        return 0
+    tq = wp.titles_to_qids("en", [t for ts in fixes.values() for t in ts])
+    places = wp.place_info([q for q in tq.values() if q])
+    by_id = {k["id"]: k for k in out["killers"]}
+    n = 0
+    for kid, titles in fixes.items():
+        k = by_id.get(kid)
+        pls = [places[q] for q in (tq.get(wp.clean_title(t)) for t in titles) if q and wp.usable(places.get(q))]
+        if k and pls:
+            murderpedia_merge.replace_area(out, k, pls, "data/validare/locatii_corectii.csv", "manual", 1.0, _place_record)
+            n += 1
+        else:
+            log.warning("Corectură neaplicată pentru %s: %s", kid, titles)
+    return n
+
+
 def _write(path, obj, compact: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(obj, ensure_ascii=False, separators=(",", ":")) if compact else \
@@ -419,8 +475,15 @@ def run() -> None:
     out = build(ctx)
     from pipeline.build import murderpedia_merge
     mp_stats = murderpedia_merge.merge(ctx, out, _place_record)
+    applied = _apply_corrections(out)
+    murderpedia_merge.rebuild_index(out)
+    from pipeline.build import qa
+    cmap = murderpedia_merge._country_map(ctx["countries"])
+    qa_stats = qa.report(out["killers"], out["features"],
+                         mp_iso=lambda loc: murderpedia_merge.split_location(loc, cmap)[0])
     cov = coverage(ctx, out)
     cov["murderpedia"] = mp_stats
+    cov["location_qa"] = {**qa_stats, "manual_corrections_applied": applied}
     country_names = {c["iso2"]: c.get("label") or c["iso2"] for c in ctx["countries"]}
     counts = Counter(c for k in out["killers"] for c in k["countries"])
     countries = [{"code": code, "name": country_names.get(code, code), "killers": n}

@@ -22,9 +22,12 @@ ENDPOINT = "https://query.wikidata.org/sparql"
 SERIAL_KILLER = "Q484188"
 BATCH = 200
 
+SPREE_KILLER = "Q1154323"
+OCCUPATIONS = {SERIAL_KILLER: "serial_killer", SPREE_KILLER: "spree_killer"}
+
 QIDS_QUERY = """
 SELECT DISTINCT ?p WHERE {
-  { ?p wdt:P106 wd:Q484188 } UNION { ?p wdt:P31/wdt:P279* wd:Q484188 }
+  { ?p wdt:P106 wd:%(o)s } UNION { ?p wdt:P31/wdt:P279* wd:%(o)s }
   ?p wdt:P31 wd:Q5 .
 }
 """
@@ -62,12 +65,17 @@ def _qid(uri: str) -> str:
     return uri.rsplit("/", 1)[-1]
 
 
-def fetch_qids(refresh: bool = False) -> list[str]:
-    res = sparql(QIDS_QUERY, cache_key="qids:v1", refresh=refresh)
-    qids = sorted({_qid(b["p"]["value"]) for b in res["data"]["results"]["bindings"]},
-                  key=lambda q: int(q[1:]))
-    log.info("Wikidata: %d item-uri umane cu ocupația/clasa serial killer", len(qids))
-    return qids
+def fetch_qids(refresh: bool = False) -> dict[str, set[str]]:
+    """QID -> tipuri („serial_killer”, „spree_killer”) după ocupația/clasa din Wikidata.
+    O interogare per ocupație (combinate, expiră pe server)."""
+    out: dict[str, set[str]] = {}
+    for occ, kind in OCCUPATIONS.items():
+        res = sparql(QIDS_QUERY % {"o": occ}, cache_key=f"qids:v3:{occ}", refresh=refresh)
+        for b in res["data"]["results"]["bindings"]:
+            out.setdefault(_qid(b["p"]["value"]), set()).add(kind)
+    log.info("Wikidata: %d item-uri umane (%d serial, %d spree)", len(out),
+             sum("serial_killer" in t for t in out.values()), sum("spree_killer" in t for t in out.values()))
+    return out
 
 
 def _batches(items: list[str], n: int) -> Iterable[list[str]]:
@@ -111,9 +119,11 @@ def save_people(people: dict[str, dict[str, Any]]) -> None:
 
 def run(refresh: bool = False) -> None:
     t0 = time.time()
-    qids = fetch_qids(refresh=refresh)
+    types = fetch_qids(refresh=refresh)
+    qids = sorted(types, key=lambda q: int(q[1:]))
     people = fetch_details(qids, refresh=refresh)
-    for p in people.values():
+    for q, p in people.items():
         p["origin"] = "wikidata-sparql"
+        p["types"] = sorted(types[q])
     save_people(people)
     log.info("Wikidata gata: %d persoane în %.0fs", len(people), time.time() - t0)
