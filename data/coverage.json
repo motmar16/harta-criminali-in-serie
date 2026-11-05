@@ -1,0 +1,68 @@
+{
+  "generated_at": "2026-11-05",
+  "killers_total": 2106,
+  "sources": {
+    "wikidata_sparql_items": 1299,
+    "added_from_wikipedia_lists": 807,
+    "wikipedia_list_entries": 3605,
+    "wikipedia_list_unique_titles": 1903,
+    "wikipedia_list_titles_with_qid": 1902,
+    "lists": [
+      "List of serial killers before 1900",
+      "List of serial killers by country",
+      "List of serial killers by number of victims",
+      "List of serial killers in Chile",
+      "List of serial killers in China",
+      "List of serial killers in Colombia",
+      "List of serial killers in South Africa",
+      "List of serial killers in the United Kingdom",
+      "List of serial killers in the United States"
+    ]
+  },
+  "articles": {
+    "with_any_wikipedia_article": 2068,
+    "with_english_article": 1984
+  },
+  "active_area": {
+    "with_any_point": 2087,
+    "at_admin1_or_finer": 1943,
+    "pct_at_admin1_or_finer": 92.3,
+    "by_precision": {
+      "admin1": 1404,
+      "city": 539,
+      "country": 144,
+      "none": 19
+    },
+    "by_basis": {
+      "wikipedia-infobox": 1500,
+      "wikipedia-lead": 363,
+      "wikipedia-crime-sections": 113,
+      "wikipedia-body": 52,
+      "wikidata-citizenship": 48,
+      "none": 19,
+      "wikipedia-list": 11
+    }
+  },
+  "birth_place_geocoded": 1184,
+  "death_place_geocoded": 699,
+  "legal_status": {
+    "convicted": 1835,
+    "undetermined": 211,
+    "suspected": 31,
+    "unidentified": 26,
+    "acquitted": 3
+  },
+  "with_victim_count": 1780,
+  "countries_with_killers": 111,
+  "events": {
+    "active_area": 3589,
+    "birth": 1184,
+    "death": 699
+  },
+  "events_layer3_murders": 0,
+  "places": 2672,
+  "not_yet_included": [
+    "Murderpedia (faza 2)",
+    "locațiile individuale ale crimelor (faza 3)"
+  ]
+}

@@ -16,7 +16,8 @@ from typing import Any
 
 from pipeline.config import DATA, SITE_DATA
 from pipeline.geocode import wikidata_places as wp
-from pipeline.normalize import dates, names
+from pipeline.config import RAW
+from pipeline.normalize import categories, dates, names
 from pipeline.normalize.places import jitter, parse_victims
 from pipeline.sources import wikidata, wikipedia
 
@@ -70,19 +71,23 @@ def collect(refresh: bool = False) -> dict[str, Any]:
             place_qids.update(p["claims"].get(prop, []))
     place_qids = {q for q in place_qids if re.fullmatch(r"Q\d+", q)}  # fără „unknown value” (genid)
     places = wp.place_info(sorted(place_qids, key=lambda q: int(q[1:])), refresh=False)
-    return {"people": people, "articles": articles, "entries": entries, "title_qid": title_qid,
+    img_path = RAW / "commons" / "images.json"
+    images = json.loads(img_path.read_text(encoding="utf-8")) if img_path.exists() else {}
+    return {"people": people, "articles": articles, "entries": entries, "title_qid": title_qid, "images": images,
             "places": places, "by_code": by_code, "countries": country_rows}
 
 
 # ------------------------------------------------------------------ construire
 
 def _resolve(ctx: dict[str, Any], lang: str, titles: list[str]) -> list[dict[str, Any]]:
+    """Locuri folosibile pentru zona de activitate. Clădirile (închisori, tribunale, spitale) se exclud:
+    în texte apar mai ales ca locuri de detenție sau proces, nu ale crimelor."""
     out = []
     m = ctx["title_qid"].get(lang, {})
     for t in titles:
         q = m.get(wp.clean_title(t))
         p = ctx["places"].get(q) if q else None
-        if wp.usable(p) and p not in out:
+        if wp.usable(p) and p["kind"] != "structure" and p not in out:
             out.append(p)
     return out
 
@@ -149,7 +154,7 @@ def _active_area(ctx: dict[str, Any], person: dict[str, Any], article: dict[str,
             for t in article.get(key, []):
                 pq = m.get(wp.clean_title(t))
                 pl = ctx["places"].get(pq) if pq else None
-                if wp.usable(pl) and pl["kind"] != "country" and consistent(pl):
+                if wp.usable(pl) and pl["kind"] not in ("country", "structure") and consistent(pl):
                     counts[pl["qid"]] += 1
                     found.setdefault(pl["qid"], pl)
             if counts:
@@ -283,6 +288,11 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
         period = dates.active_period(ib.get("begin_year") or ib.get("beginyear"),
                                      ib.get("end_year") or ib.get("endyear"), ib.get("years_active"))
         legal = _legal_status(p, art, lentries)
+        hints = categories.wiki_category_hints(art["categories"]) if art else ""
+        desc = (c.get("description") or [None])[0]
+        meth = categories.methods(hints, ib.get("weapons"))
+        vtypes = categories.victim_types(hints, desc)
+        image = ctx["images"].get(q) if legal != "unidentified" else None
         manners = [MANNER[m] for m in c.get("P1196", []) if m in MANNER]
         status = manners[0] if manners else ("deceased" if death_t else None)
         countries = []
@@ -313,11 +323,12 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
             "legal_status": legal,
             "penalty": ib.get("penalty") or ib.get("criminal_penalty"),
             "classification": [],
-            "method": [],
+            "method": meth,
+            "victim_types": vtypes,
             "summary": {"text": art["summary"], "license": "CC BY-SA 4.0", "source_url": art["source_url"],
                         "attribution": f"Wikipedia contributors, “{art['title']}”"}
             if art and art.get("summary") else None,
-            "image": None,  # faza 4: doar Commons cu licență verificată
+            "image": image,  # doar Wikimedia Commons (P18) cu licență liberă verificată
             "links": {"wikipedia": art["url"] if art else None, "wikidata": wd_url, "murderpedia": None,
                       "killercloud": None, "serialkillersinfo": None},
             "lists": sorted({e["list"] for e in lentries}),
@@ -325,6 +336,8 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
                 "identity": "wikidata",
                 "inclusion": "wikidata-occupation" if p.get("origin") == "wikidata-sparql" else "wikipedia-list",
                 "victims": victims["source"] if victims else None,
+                "method_victim_types": "keywords: wikipedia-categories+infobox" if (meth or vtypes) else None,
+                "image": "wikimedia-commons" if image else None,
                 "active": "wikipedia-infobox" if period else None,
                 "active_area": basis,
                 "legal_status": "wikidata+wikipedia-categories" if legal else None,
@@ -341,6 +354,9 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
                 "id": q, "slug": slug, "name": name, "countries": ",".join(countries),
                 "victims": victims["proven"] if victims else None, "legal": legal,
                 "precision": primary["properties"]["precision"], "place": primary["properties"]["place_name"],
+                "sex": killer["sex"], "from": int(period["start"]) if period else None,
+                "to": int(period["end"]) if period else None,
+                "m": ",".join(meth), "vt": ",".join(vtypes), "img": 1 if image else 0,
             }})
     return {"killers": killers, "features": features, "index": index, "places": used_places}
 

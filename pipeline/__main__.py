@@ -20,6 +20,16 @@ def _cmd_wikipedia(args: argparse.Namespace) -> None:
     wikipedia.run(refresh=args.refresh)
 
 
+def _cmd_murderpedia(args: argparse.Namespace) -> None:
+    from pipeline.sources import murderpedia
+    murderpedia.run(refresh=args.refresh)
+
+
+def _cmd_commons(args: argparse.Namespace) -> None:
+    from pipeline.sources import commons, wikidata
+    commons.run(wikidata.load_people())
+
+
 def _cmd_places(args: argparse.Namespace) -> None:
     from pipeline.geocode import wikidata_places
     wikidata_places.run(refresh=args.refresh)
@@ -33,7 +43,7 @@ def _cmd_build(args: argparse.Namespace) -> None:
 def _cmd_all(args: argparse.Namespace) -> None:
     _cmd_wikidata(args)
     _cmd_wikipedia(args)
-    _cmd_places(args)
+    _cmd_commons(args)
     _cmd_build(args)
 
 
@@ -52,6 +62,8 @@ def main(argv: list[str] | None = None) -> int:
     for name, fn, help_ in [
         ("wikidata", _cmd_wikidata, "SPARQL: lista criminalilor în serie + proprietăți (faza 1)"),
         ("wikipedia", _cmd_wikipedia, "wikitext articole (infobox + lead) și liste Wikipedia (faza 1)"),
+        ("murderpedia", _cmd_murderpedia, "indexuri + profiluri Murderpedia, doar câmpuri structurate (faza 2; ~2 ore prima dată)"),
+        ("commons", _cmd_commons, "imaginile P18 din Wikimedia Commons, cu licență verificată"),
         ("places", _cmd_places, "rezolvă locurile prin Wikidata (coordonate, țară, precizie)"),
         ("build", _cmd_build, "unește sursele și exportă data/*.json + site/public/data/"),
         ("all", _cmd_all, "rulează toți pașii de mai sus, în ordine"),

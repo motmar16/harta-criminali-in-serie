@@ -14,6 +14,11 @@ def slugify(text: str) -> str:
 
 
 def primary_name(claims: dict, article_title: str | None = None) -> str:
+    """Numele afișat, fără dezambiguări de tip „(serial killer)”."""
+    return re.sub(r"\s*\([^)]*\)\s*$", "", _raw_name(claims, article_title)).strip()
+
+
+def _raw_name(claims: dict, article_title: str | None = None) -> str:
     for key in ("label:en", "label:mul"):
         if claims.get(key):
             return claims[key][0]
