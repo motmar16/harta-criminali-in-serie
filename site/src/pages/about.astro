@@ -1,0 +1,61 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { readData, type Coverage } from '../lib/data';
+const cov = readData<Coverage & Record<string, any>>('coverage.json');
+const REPO = 'https://github.com/motmar16/harta-criminali-in-serie';
+---
+<Base title="About, methodology and sources — Serial Killer Map"
+      description="How the map is built: sources, inclusion rules, location method, limits and corrections.">
+  <PageHeader />
+  <main class="page prose">
+    <h1>About this map</h1>
+    <p>A documentary map of serial killers, spree killers and mass murderers worldwide, built only from public sources,
+      with the source of every fact shown on each record. It is not sensational content: there are no rankings, and
+      no photographs of victims. Victims are named only when the linked Wikipedia article already names them.</p>
+    <p class="muted">{cov.killers_total.toLocaleString('en')} records · data updated {cov.generated_at}.</p>
+
+    <h2>Who is included</h2>
+    <ul>
+      <li><strong>Wikidata</strong>: people whose occupation is serial killer, spree killer, mass murderer or school shooter.</li>
+      <li><strong>Wikipedia</strong> (English): the lists of serial killers and the “Serial killers” and “Mass murderers”
+        category trees. Military and state violence (war crimes, genocide) is excluded.</li>
+      <li><strong>Murderpedia</strong>: profiles classified “Serial killer”, “Spree killer” or “Mass murderer”.
+        Only structured facts are used, never its texts or photographs.</li>
+    </ul>
+    <p>Each record shows a legal status. <em>Suspected / alleged</em> people and <em>unidentified</em> perpetrators are
+      marked as such and are not presented as convicted. Unidentified perpetrators have no known sex and no photo.</p>
+
+    <h2>Where the dots are</h2>
+    <p>A dot marks the <strong>area where the crimes took place</strong>, not the place of birth or imprisonment. In order of
+      preference it comes from: manual corrections, the Wikipedia infobox, the location of the linked event on Wikidata
+      (for example a massacre), Radford University timelines, places linked in sentences about the crimes (in any
+      language), the Murderpedia “Location” field, and finally the country only. Large, faded dots mean the location is
+      only known at state or country level. Individual crime scenes are not mapped yet.</p>
+
+    <h2>Sources and licences</h2>
+    <ul>
+      <li>Wikidata — CC0.</li>
+      <li>Wikipedia — summaries quoted under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>,
+        with a link to the exact revision.</li>
+      <li>Murderpedia — structured facts only (classification, method, location), with a link to each profile.</li>
+      <li>Radford University, Psychology 405 “Serial Killer Timelines” — link to each timeline (PDF); only places are extracted.</li>
+      <li>Portraits — Wikimedia Commons only, with free licences checked file by file; author and licence under each image.</li>
+      <li>Map — © OpenStreetMap contributors, tiles by OpenFreeMap.</li>
+    </ul>
+
+    <h2>Errors and corrections</h2>
+    <p>Data compiled automatically will contain mistakes. Please report them, ideally with a source:
+      <a href={`${REPO}/issues/new`}>open an issue on GitHub</a>. Requests to remove a record about a living person
+      who was not convicted are handled with priority.</p>
+    <p class="muted small">Source code and extracted data: <a href={REPO}>{REPO}</a>.</p>
+  </main>
+</Base>
+<style>
+  .page { max-width: 760px; margin: 0 auto; padding: 12px 16px 56px; }
+  .prose h1 { font-size: 34px; margin: 10px 0 8px; }
+  .prose h2 { font-size: 21px; margin: 28px 0 6px; }
+  .prose p, .prose li { font-size: 15.5px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 13px; }
+</style>

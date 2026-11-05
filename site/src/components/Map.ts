@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 // Îl împachetăm explicit ca worker ES și îi dăm URL-ul.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import type { Feature, FeatureCollection, Point } from 'geojson';
+import { url } from '../lib/url';
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -12,7 +13,7 @@ const STYLES = {
   light: 'https://tiles.openfreemap.org/styles/positron',
   dark: 'https://tiles.openfreemap.org/styles/dark',
 };
-const DATA = '/data';
+const DATA = url('/data');
 const RADFORD_URL = 'https://maamodt.asp.radford.edu/Psyc%20405/serial_killer_timelines.htm';
 
 // ------------------------------------------------------------------ tipuri
@@ -194,7 +195,7 @@ function renderPanel(k: Killer, events: Feature<Point, EventProps>[]): string {
       ${row('Life', life)}
       ${row('Active', k.active ? `${esc(k.active.start)}${k.active.end !== k.active.start ? '–' + esc(k.active.end) : ''}` : '')}
       ${row('Victims', k.victims ? `<strong>${esc(fmtVictims(k.victims))}</strong>${showNote ? ` <span class="muted">“${esc(k.victims!.note)}”</span>` : ''}` : '')}
-      ${row('Countries', k.countries.map((c) => `<a href="/country/${esc(c.toLowerCase())}">${esc(c)}</a>`).join(', '))}
+      ${row('Countries', k.countries.map((c) => `<a href="${url('/country/' + c.toLowerCase())}">${esc(c)}</a>`).join(', '))}
       ${row('Type', (k.type ?? ['serial_killer']).map((t) => TYPE_LABEL[t] ?? t).join(', '))}
       ${row('Classification', k.classification?.length ? esc(k.classification.join(', ')) + ' <span class="muted small">(Murderpedia)</span>' : '')}
       ${row('Method', tags(k.method))}

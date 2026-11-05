@@ -592,23 +592,38 @@ def coverage(ctx: dict[str, Any], out: dict[str, Any]) -> dict[str, Any]:
 
 
 def _apply_corrections(out: dict[str, Any]) -> int:
-    """Corecturi manuale de locație din data/validare/locatii_corectii.csv (au prioritate maximă)."""
+    """Corecturi manuale de locație (data/validare/, vezi pipeline/build/qa.py); au prioritate maximă.
+    Valori: titluri Wikipedia engleză sau QID-uri Wikidata; „ok” = locația automată a fost verificată."""
     from pipeline.build import murderpedia_merge, qa
     fixes = qa.load_corrections()
     if not fixes:
         return 0
-    tq = wp.titles_to_qids("en", [t for ts in fixes.values() for t in ts])
-    places = wp.place_info([q for q in tq.values() if q])
+    titles = [t for ts in fixes.values() for t in ts if t != "ok" and not re.fullmatch(r"Q[0-9]+", t)]
+    tq = wp.titles_to_qids("en", titles)
+    qids = [q for q in tq.values() if q] + [t for ts in fixes.values() for t in ts if re.fullmatch(r"Q[0-9]+", t)]
+    places = wp.place_info(qids)
     by_id = {k["id"]: k for k in out["killers"]}
     n = 0
-    for kid, titles in fixes.items():
+    for kid, vals in fixes.items():
         k = by_id.get(kid)
-        pls = [places[q] for q in (tq.get(wp.clean_title(t)) for t in titles) if q and wp.usable(places.get(q))]
-        if k and pls:
-            murderpedia_merge.replace_area(out, k, pls, "data/validare/locatii_corectii.csv", "manual", 1.0, _place_record)
+        if not k:
+            log.warning("Corectură pentru un id necunoscut: %s", kid)
+            continue
+        if vals == ["ok"]:
+            k["sources"]["active_area_verified"] = "manual"  # sursa automată rămâne, dar e confirmată de om
             n += 1
-        else:
-            log.warning("Corectură neaplicată pentru %s: %s", kid, titles)
+            continue
+        pls = []
+        for v in vals:
+            q = v if re.fullmatch(r"Q[0-9]+", v) else tq.get(wp.clean_title(v))
+            if q and wp.usable(places.get(q)):
+                pls.append(places[q])
+            else:
+                log.warning("Corectură %s: „%s” nu e un loc recunoscut (titlu Wikipedia engleză sau Q-ID)", kid, v)
+        if pls:
+            murderpedia_merge.replace_area(out, k, pls, "data/validare/locatii_corectii.csv", "manual", 1.0,
+                                           _place_record)
+            n += 1
     return n
 
 

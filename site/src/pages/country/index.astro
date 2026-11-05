@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import PageHeader from '../../components/PageHeader.astro';
+import { url } from '../../lib/url';
 import { readData, type CountryRow } from '../../lib/data';
 const countries = readData<CountryRow[]>('countries.json');
 ---
@@ -10,7 +11,7 @@ const countries = readData<CountryRow[]>('countries.json');
     <h1>By country</h1>
     <p class="muted">Countries where at least one documented person was active (area of activity, not citizenship). {countries.length} countries.</p>
     <ul class="countries">
-      {countries.map((c) => <li><a href={`/country/${c.code.toLowerCase()}`}>{c.name}</a> <span class="muted">{c.killers}</span></li>)}
+      {countries.map((c) => <li><a href={url(`/country/${c.code.toLowerCase()}`)}>{c.name}</a> <span class="muted">{c.killers}</span></li>)}
     </ul>
   </main>
 </Base>

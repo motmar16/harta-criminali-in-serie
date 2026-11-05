@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import PageHeader from '../../components/PageHeader.astro';
+import { url } from '../../lib/url';
 import { readData, type CountryRow, type KillerRow } from '../../lib/data';
 
 export function getStaticPaths() {
@@ -34,13 +35,13 @@ const victims = (v: { proven: number | null; possible: number | null } | null) =
   <main class="page">
     <h1>{country.name}</h1>
     <p class="muted">{people.length} documented {people.length === 1 ? 'person' : 'people'} with an area of activity in {country.name}.
-      <a href={`/?c=${country.code}`}>Show on map</a></p>
+      <a href={url(`/?c=${country.code}`)}>Show on map</a></p>
     <table>
       <thead><tr><th>Name</th><th>Active</th><th>Victims</th><th>Legal status</th><th>Sources</th></tr></thead>
       <tbody>
         {people.map((p) => (
           <tr>
-            <td><a href={`/?k=${p.id}`}>{p.name}</a>{p.description && <div class="muted small">{p.description}</div>}</td>
+            <td><a href={url(`/?k=${p.id}`)}>{p.name}</a>{p.description && <div class="muted small">{p.description}</div>}</td>
             <td>{p.active ? (p.active.start === p.active.end ? p.active.start : `${p.active.start}–${p.active.end}`) : '—'}</td>
             <td>{victims(p.victims)}</td>
             <td>{p.legal ? LEGAL[p.legal] ?? p.legal : 'not verified'}</td>
