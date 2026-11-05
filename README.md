@@ -20,8 +20,13 @@ npm --prefix site install
 Date (refăcute din cache-ul local `data/raw/` când există; altfel descărcate politicos, 1 cerere/secundă):
 
 ```bash
-.venv/Scripts/python -m pipeline all
+.venv/Scripts/python -m pipeline all          # Wikidata, Wikipedia, Commons, build (minute, din cache)
+.venv/Scripts/python -m pipeline murderpedia  # manual; prima dată ~2 ore (6.900 pagini la 1 cerere/s), apoi din cache
+.venv/Scripts/python -m pipeline build        # reface data/ din tot ce e în cache
 ```
+
+Cazurile Murderpedia ↔ Wikidata neclare ajung în `data/validare/dedupe_ambigue.csv`; completează coloana `decizie`
+(QID-ul corect, `nou` sau `diferit`) și rulează din nou `build`.
 
 Site:
 

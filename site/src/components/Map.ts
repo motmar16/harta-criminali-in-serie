@@ -183,9 +183,11 @@ function renderPanel(k: Killer, events: Feature<Point, EventProps>[]): string {
       ${row('Active', k.active ? `${esc(k.active.start)}${k.active.end !== k.active.start ? '–' + esc(k.active.end) : ''}` : '')}
       ${row('Victims', k.victims ? `<strong>${esc(fmtVictims(k.victims))}</strong>${showNote ? ` <span class="muted">“${esc(k.victims!.note)}”</span>` : ''}` : '')}
       ${row('Countries', k.countries.map((c) => `<a href="/country/${esc(c.toLowerCase())}">${esc(c)}</a>`).join(', '))}
+      ${row('Classification', k.classification?.length ? esc(k.classification.join(', ')) + ' <span class="muted small">(Murderpedia)</span>' : '')}
       ${row('Method', tags(k.method))}
       ${row('Victims were', tags(k.victim_types))}
       ${row('Penalty', k.penalty ? esc(k.penalty) : '')}
+      ${row('Status', !k.penalty && mp?.status ? esc(mp.status) + ' <span class="muted small">(Murderpedia)</span>' : '')}
     </dl>
     <section>
       <h3>Locations</h3>

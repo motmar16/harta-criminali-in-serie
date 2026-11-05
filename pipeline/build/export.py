@@ -398,7 +398,12 @@ def coverage(ctx: dict[str, Any], out: dict[str, Any]) -> dict[str, Any]:
         "events": dict(Counter(f["properties"]["kind"] for f in out["features"]).most_common()),
         "events_layer3_murders": 0,
         "places": len(out["places"]),
-        "not_yet_included": ["Murderpedia (faza 2)", "locațiile individuale ale crimelor (faza 3)"],
+        "with_murderpedia_link": sum(1 for k in killers if k["links"].get("murderpedia")),
+        "by_inclusion": dict(Counter(k["sources"]["inclusion"] for k in killers).most_common()),
+        "with_photo": sum(1 for k in killers if k.get("image")),
+        "with_method": sum(1 for k in killers if k.get("method")),
+        "with_victim_types": sum(1 for k in killers if k.get("victim_types")),
+        "not_yet_included": ["locațiile individuale ale crimelor (faza 3)"],
     }
 
 
@@ -412,12 +417,15 @@ def _write(path, obj, compact: bool = True) -> None:
 def run() -> None:
     ctx = collect()
     out = build(ctx)
+    from pipeline.build import murderpedia_merge
+    mp_stats = murderpedia_merge.merge(ctx, out, _place_record)
     cov = coverage(ctx, out)
+    cov["murderpedia"] = mp_stats
     country_names = {c["iso2"]: c.get("label") or c["iso2"] for c in ctx["countries"]}
     counts = Counter(c for k in out["killers"] for c in k["countries"])
     countries = [{"code": code, "name": country_names.get(code, code), "killers": n}
                  for code, n in sorted(counts.items(), key=lambda kv: country_names.get(kv[0], kv[0]))]
-    killers = sorted(out["killers"], key=lambda k: k["id"] and int(k["id"][1:]))
+    killers = sorted(out["killers"], key=lambda k: (0, int(k["id"][1:]), "") if k["id"].startswith("Q") else (1, 0, k["id"]))
     places = sorted(out["places"].values(), key=lambda p: int(p["id"][3:]))
     files = {
         "killers.json": killers,

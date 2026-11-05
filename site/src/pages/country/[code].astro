@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import PageHeader from '../../components/PageHeader.astro';
 import { readData, type CountryRow, type KillerRow } from '../../lib/data';
 
 export function getStaticPaths() {
@@ -29,8 +30,8 @@ const victims = (v: { proven: number | null; possible: number | null } | null) =
 ---
 <Base title={`Serial killers in ${country.name} — Serial Killer Map`}
       description={`${people.length} documented serial killers active in ${country.name}, with sources.`}>
+  <PageHeader />
   <main class="page">
-    <p><a href="/">← Map</a> · <a href="/country/">All countries</a></p>
     <h1>{country.name}</h1>
     <p class="muted">{people.length} documented {people.length === 1 ? 'person' : 'people'} with an area of activity in {country.name}.
       <a href={`/?c=${country.code}`}>Show on map</a></p>
@@ -51,8 +52,9 @@ const victims = (v: { proven: number | null; possible: number | null } | null) =
   </main>
 </Base>
 <style>
-  .page { max-width: 1000px; margin: 0 auto; padding: 24px 16px 48px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .page { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 34px; margin: 10px 0 4px; }
+  table { width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; border-collapse: collapse; font-size: 14px; }
   th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 600; }
   .muted { color: var(--muted); }

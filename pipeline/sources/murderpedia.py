@@ -55,7 +55,9 @@ def fetch_html(url: str) -> str:
 
 def _text(fragment: str) -> str:
     fragment = re.sub(r"(?is)<script.*?</script>", " ", fragment)
-    fragment = re.sub(r"<[^>]+>", " ", fragment)
+    # tagurile de bloc separă cuvinte; cele inline (b, font, span…) pot fi în mijlocul unui cuvânt („Canad<b>a”)
+    fragment = re.sub(r"(?i)<(?:br|/?p|/?td|/?tr|/?div|/?li|/?table)[^>]*>", " ", fragment)
+    fragment = re.sub(r"<[^>]+>", "", fragment)
     return re.sub(r"\s+", " ", html.unescape(fragment)).strip()
 
 

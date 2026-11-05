@@ -1,0 +1,26 @@
+---
+// Antet comun pentru paginile de conținut (țări etc.), cu comutator de temă.
+---
+<header class="page-head">
+  <a class="brand" href="/"><span class="mark" aria-hidden="true"></span><strong>Serial Killer Map</strong></a>
+  <nav>
+    <a href="/">Map</a>
+    <a href="/country/">Countries</a>
+    <button id="theme-btn" class="theme" type="button" aria-label="Switch light / dark theme">◐</button>
+  </nav>
+</header>
+<style>
+  .page-head { display: flex; align-items: center; gap: 16px; max-width: 1040px; margin: 0 auto; padding: 18px 16px 6px; }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; font-family: var(--serif); font-size: 19px; }
+  .mark { width: 24px; height: 24px; border-radius: 50%;
+    background: radial-gradient(circle at 50% 50%, var(--female) 0 22%, transparent 23%), radial-gradient(circle, transparent 0 46%, var(--male) 47% 60%, transparent 61%); }
+  nav { margin-left: auto; display: flex; gap: 14px; align-items: center; font-size: 14px; }
+  .theme { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; width: 32px; height: 32px; cursor: pointer; }
+</style>
+<script>
+  document.getElementById('theme-btn')?.addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('theme', next); } catch { /* mod privat */ }
+  });
+</script>

@@ -55,3 +55,46 @@ Direct din Wikidata: P19/P20 cu P625 pe item-ul locului.
 ## Victime
 
 Wikidata P1345 când există, altfel câmpul `victims` din infobox; textul original rămâne în `victims.note`.
+
+## Murderpedia (faza 2)
+
+Din fiecare profil se extrag **doar** câmpurile etichetate: Classification, Characteristics, Number of victims,
+Date of murder, Date of arrest, Date of birth, Victim profile, Method of murder, Location, Status, plus numele,
+URL-ul și un indicator că există galerie foto. Narațiunea, articolele de presă și fotografiile nu se preiau.
+
+- **Cine intră ca persoană nouă:** doar profilurile cu „Serial killer” în Classification (cele cu „?” devin
+  `suspected`). Celelalte profiluri (omoruri simple, crime în masă) servesc doar la îmbogățirea persoanelor deja
+  existente, și numai cu potrivire strictă (același an de naștere).
+- **Deduplicare:** nume normalizat (rapidfuzz) + an naștere ± 1 + țară. Cazurile neclare merg în
+  `data/validare/dedupe_ambigue.csv`; o decizie scrisă în coloana `decizie` (QID, „nou” sau „diferit”) e respectată
+  la rularea următoare.
+- **„Victim profile” nu se publică** (poate conține nume de victime care nu apar în Wikipedia). Din el se derivă doar
+  etichete de tip: femei, bărbați, copii (toate vârstele < 16), vârstnici (toate ≥ 65), familie, pacienți etc.
+- **Locația** („Yonkers, Westchester County, New York, USA”) se rezolvă tot prin Wikipedia/Wikidata, încercând titluri
+  de la specific la general („Yonkers, New York”, „Yonkers”, „Westchester County, New York”…), cu verificarea țării.
+
+Precedență per câmp:
+| Câmp | Ordine |
+|---|---|
+| victime | Wikidata P1345 → infobox Wikipedia → Murderpedia |
+| perioadă activă | infobox Wikipedia → anii din „Date of murder” (Murderpedia) |
+| zonă de activitate | Wikipedia dacă e la nivel ≤ admin1; altfel Murderpedia „Location”; altfel țara |
+| clasificare | Murderpedia |
+| metodă, tip victime | reuniunea etichetelor din Wikipedia și Murderpedia |
+| statut juridic | Wikidata/Wikipedia; dacă lipsește, din „Status” (Murderpedia) |
+
+## Imagini
+
+Doar Wikimedia Commons, prin P18 din Wikidata, cu licența citită din metadatele fișierului (domeniu public, CC0,
+CC BY, CC BY-SA, FAL, OGL, GFDL). Nu se afișează imagini pentru autori neidentificați și nici fișiere al căror nume
+sugerează victime sau locul crimei. Fiecare imagine are autorul și licența afișate sub ea.
+
+## Etichete pentru filtre
+
+Metoda (împușcare, înjunghiere, strangulare, otrăvire, lovire, sufocare, incendiere, înec) și tipul victimelor se obțin
+din cuvinte-cheie, deci sunt incomplete și pot avea erori; site-ul o spune explicit lângă filtre.
+
+## Radford/FGCU
+
+Baza Radford/FGCU nu are pagini publice per persoană; site-ul pune doar un link general către descrierea proiectului.
+Datele pot fi cerute prin email (șablon în PLAN, Anexa B) și, dacă vin, se folosesc doar pentru verificare și statistici.
