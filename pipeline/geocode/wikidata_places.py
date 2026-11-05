@@ -236,3 +236,39 @@ def run(refresh: bool = False) -> None:
     """Rezolvarea locurilor se face la cerere (cu cache) în timpul build-ului; aici doar o pregătim."""
     from pipeline.build import export
     export.collect(refresh=refresh)
+
+
+# ------------------------------------------------------------------ evenimente (masacre, atacuri, serii de crime)
+
+EVENT_TITLE = re.compile(r"massacre|shooting|attack|murders|bombing|killings|stabbing|rampage|spree|"
+                         r"siege|arson|poisoning|slaying|homicides|hostage|strangl", re.I)
+EVENT_QUERY = """
+SELECT ?e ?label ?coord ?loc ?admin WHERE {
+  VALUES ?e { %s }
+  OPTIONAL { ?e rdfs:label ?label . FILTER(LANG(?label) = "en") }
+  OPTIONAL { ?e wdt:P625 ?coord }
+  OPTIONAL { ?e wdt:P276 ?loc }
+  OPTIONAL { ?e wdt:P131 ?admin }
+}
+"""
+
+
+def event_info(qids: Iterable[str]) -> dict[str, dict[str, Any]]:
+    """Eveniment -> {label, coord, loc [QID-uri P276], admin [QID-uri P131]}. Cache în data/raw/wikidata."""
+    qids = sorted({q for q in qids if q and re.fullmatch(r"Q\d+", q)}, key=lambda q: int(q[1:]))
+    out: dict[str, dict[str, Any]] = {}
+    for batch in _batches(qids, 100):
+        data = sparql(EVENT_QUERY % " ".join(f"wd:{q}" for q in batch), cache_key="event:v1:" + ",".join(batch))
+        for b in data["data"]["results"]["bindings"]:
+            q = b["e"]["value"].rsplit("/", 1)[-1]
+            e = out.setdefault(q, {"qid": q, "label": None, "coord": None, "loc": [], "admin": []})
+            if "label" in b:
+                e["label"] = b["label"]["value"]
+            if "coord" in b and not e["coord"]:
+                e["coord"] = _point(b["coord"]["value"])
+            for k in ("loc", "admin"):
+                if k in b:
+                    v = b[k]["value"].rsplit("/", 1)[-1]
+                    if v not in e[k]:
+                        e[k].append(v)
+    return out

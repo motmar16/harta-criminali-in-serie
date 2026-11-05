@@ -23,7 +23,9 @@ SERIAL_KILLER = "Q484188"
 BATCH = 200
 
 SPREE_KILLER = "Q1154323"
-OCCUPATIONS = {SERIAL_KILLER: "serial_killer", SPREE_KILLER: "spree_killer"}
+MASS_MURDERER, SCHOOL_SHOOTER = "Q15883433", "Q107565466"
+OCCUPATIONS = {SERIAL_KILLER: "serial_killer", SPREE_KILLER: "spree_killer",
+               MASS_MURDERER: "mass_murderer", SCHOOL_SHOOTER: "mass_murderer"}
 
 QIDS_QUERY = """
 SELECT DISTINCT ?p WHERE {
@@ -73,8 +75,9 @@ def fetch_qids(refresh: bool = False) -> dict[str, set[str]]:
         res = sparql(QIDS_QUERY % {"o": occ}, cache_key=f"qids:v3:{occ}", refresh=refresh)
         for b in res["data"]["results"]["bindings"]:
             out.setdefault(_qid(b["p"]["value"]), set()).add(kind)
-    log.info("Wikidata: %d item-uri umane (%d serial, %d spree)", len(out),
-             sum("serial_killer" in t for t in out.values()), sum("spree_killer" in t for t in out.values()))
+    log.info("Wikidata: %d item-uri umane (%d serial, %d spree, %d mass)", len(out),
+             sum("serial_killer" in t for t in out.values()), sum("spree_killer" in t for t in out.values()),
+             sum("mass_murderer" in t for t in out.values()))
     return out
 
 

@@ -31,7 +31,7 @@ COUNTRY_ALIASES = {
 }
 PRECISION_FINE = ("address", "city", "county", "admin1")
 # surse euristice peste care „Location” din Murderpedia (câmp explicit despre locul crimelor) are prioritate
-WEAK_AREA = {"wikipedia-lead", "wikipedia-crime-sections", "wikipedia-body", "wikipedia-list",
+WEAK_AREA = {"wikipedia-lead", "wikipedia-crime-sections", "wikipedia-body", "wikipedia-list", "wikipedia-list-text",
              "wikidata-citizenship", "none", None}
 
 
@@ -200,6 +200,7 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
         stats["profiles"] += 1
         stats["serial"] += mtype == "serial_killer"
         stats["spree"] += mtype == "spree_killer"
+        stats["mass"] += mtype == "mass_murderer"
         iso, cname, segs = split_location(rec.get("location"), cmap)
         rec["_iso"], rec["_cname"], rec["_segs"] = iso, cname, segs
         decision = manual.get(rec["url"])
@@ -234,6 +235,22 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
             })
             continue
         new.append(rec)
+    # profilurile individuale ale membrilor unui duo („Eric David Harris”) se leagă de intrarea duo-ului
+    groups = [k for k in killers if k["sources"].get("inclusion") == "wikipedia-category-group"]
+    still_new = []
+    for rec in new:
+        toks = set(dedupe.norm((rec.get("title") or "").split("|")[0]).split())
+        sur = dedupe.mp_surname(rec)
+        g = next((k for k in groups if sur and sur in dedupe.norm(k["names"]["primary"]).split()
+                  and len(toks & set(dedupe.norm(k["names"]["primary"]).split())) >= 2), None)
+        if g and g["id"] not in matched:
+            matched[g["id"]] = rec
+            stats["matched_group"] += 1
+        elif g:
+            stats["group_member_extra"] += 1  # al doilea membru: duo-ul are deja un profil legat
+        else:
+            still_new.append(rec)
+    new = still_new
     dedupe.write_ambiguous(ambiguous_rows, manual)
 
     # geocodare „Location” pentru: noi + potriviți fără zonă fină
@@ -343,7 +360,7 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
             "classification": [rec["classification"]] if rec.get("classification") else [],
             "method": categories.methods(rec.get("method")), "victim_types": victim_types_mp(rec),
             "summary": None, "image": None,
-            "links": {"wikipedia": None, "wikidata": None, "murderpedia": rec["url"], "killercloud": None,
+            "links": {"wikipedia": None, "wikidata": None, "murderpedia": rec["url"], "radford": None, "killercloud": None,
                       "serialkillersinfo": None},
             "lists": [], "murderpedia": mp_block(rec),
             "sources": {"identity": "murderpedia", "inclusion": f"murderpedia-{rec['_type'].replace('_', '-')}",
@@ -364,7 +381,7 @@ def merge(ctx: dict[str, Any], out: dict[str, Any], place_record, area_conf: flo
 
     rebuild_index(out)
     result = {**stats, "matched_total": len(matched), "new_serial": added, "area_upgraded": upgraded,
-              "ambiguous_pct_of_eligible": round(100 * stats["ambiguous"] / max(stats["serial"] + stats["spree"], 1), 1)}
+              "ambiguous_pct_of_eligible": round(100 * stats["ambiguous"] / max(stats["serial"] + stats["spree"] + stats["mass"], 1), 1)}
     log.info("Murderpedia: %s", result)
     return result
 

@@ -80,3 +80,37 @@ Cifre finale (`data/coverage.json`):
   149 doar țară, 28 fără locație. Ținta de 95% rămâne ușor sub; restul e de obicei fără loc în nicio sursă.
 - Link Murderpedia: 1.358; poze Commons: 523; cu metodă: 1.289; cu tip de victime: 2.171.
 - Statut: 2.497 condamnați, 227 neverificat, 132 neidentificați, 53 suspecți, 43 decedați înainte de proces, 14 achitați.
+
+## 2026-11-05 (seara) — Radford, mass murderers, corectarea locațiilor
+
+Cereri Marius: surse noi pentru cele 341 de locații de verificat; Radford are de fapt pagini per criminal
+(„Serial Killer Timelines”, PDF); Columbine lipsea.
+
+**Radford:** abaterea din plan era greșită: pe lângă baza completă (nepublică), cursul Psyc 405 publică 190 de cronologii
+PDF. Descărcate o dată (1 cerere/s, `data/raw/radford/`), **146 potrivite cu persoane** → link direct la PDF pe fișă;
+din 173 de PDF-uri s-au extras locuri din rândurile despre crime. Textul nu se copiază.
+
+**Mass murderers (Columbine):** Harris și Klebold sunt „mass murderer” (un singur eveniment), nu „spree killer”.
+Adăugat al treilea tip, din Wikidata (Q15883433, Q107565466), arborele Wikipedia „Mass murderers” și Murderpedia
+(„Mass murderer”, 545 profiluri). Din arborele Wikipedia s-au exclus **517 militari / criminali de război / politicieni**
+(feldmareșali, ofițeri SS, guvernatori coloniali). Duo-urile („Eric Harris and Dylan Klebold”) sunt o singură intrare.
+
+**Locații – surse noi:**
+- articolul evenimentului din Wikidata (P276/P131/P625), doar primul eveniment legat: 166 de persoane (Whitman → turnul
+  universității, Cho → Virginia Tech);
+- propozițiile despre crime din articolele în alte limbi (ru, uk, de, fr…), pentru cazurile semnalate (listă cumulativă
+  în `data/validare/tinte_alte_limbi.txt`);
+- textul intrărilor din listele Wikipedia („… on the road from [[Kabul]] to [[Jalalabad]]”);
+- cronologiile Radford.
+- **Bug important găsit:** la cazurile sovietice, infobox-ul spune „Soviet Union” (SU), iar orașele sunt în RU/UA/BY; testul
+  de consecvență a țării le respingea pe toate. Acum URSS/Iugoslavia/Cehoslovacia/RDG acceptă statele succesoare.
+- Parantezele din propoziții (locul nașterii în articolele rusești) se scot.
+- Bug de unealtă: editările făcute prin heredoc în Git Bash înjumătățeau `\`, ceea ce a produs regex-uri stricate
+  (`\b`, `\1`) și octeți nuli; toate găsite și reparate, verificate cu teste și citire directă.
+
+Rezultat pe cele 341: **104 rezolvate**; rămân 237 (94 „zona = locul nașterii”, adesea corecte, 86 doar țară, 32 sursă
+slabă, 26 fără locație).
+
+Cifre (`data/coverage.json`): **3.893 de persoane** (2.810 serial, 976 mass, 211 spree; unele au mai multe tipuri),
+132 de țări; zonă la nivel ≤ admin1: **95,9%** (2.060 oraș, 1.635 stat/regiune, 37 adresă exactă, 127 doar țară,
+34 fără). Criteriul de 95% din plan e atins. Link Murderpedia 1.904, link Radford 146, poze 709.

@@ -4,15 +4,24 @@ Document de lucru; devine pagina publică „Methodology” în faza 4.
 
 ## Cine e inclus
 
-Două tipuri: **criminali în serie** și **spree killers** (crime în locuri diferite într-un interval scurt, fără
-pauză de „răcire”). Câmpul `type` le distinge; harta are filtru separat.
+Trei tipuri, în câmpul `type` (o persoană poate avea mai multe), cu filtru separat pe hartă:
+- **serial killer**: crime separate în timp, cu pauză între ele;
+- **spree killer**: crime în locuri diferite într-un interval scurt;
+- **mass murderer**: un singur eveniment, într-un singur loc (ex. Columbine, Utøya).
 
-- Wikidata: oameni cu ocupația/clasa „serial killer” (Q484188) sau „spree killer” (Q1154323).
+Pentru „mass murderer”, din arborele Wikipedia „Mass murderers” se exclud militarii și violența de stat (genocid,
+naziști, crime de război, generali, ofițeri), dacă descrierea nu îi prezintă explicit ca atacatori
+(„spree killer and former soldier” rămâne). Articolele comune pentru doi făptași („Eric Harris and Dylan Klebold”)
+sunt o singură intrare; persoanele al căror articol e cel comun se contopesc în ea.
+
+- Wikidata: oameni cu ocupația/clasa „serial killer” (Q484188), „spree killer” (Q1154323), „mass murderer”
+  (Q15883433) sau „school shooter” (Q107565466).
 - Arborele de categorii Wikipedia engleză „Serial killers” (verificare încrucișată): paginile aflate direct în
   categorii „… serial killers …”. Oamenii intră direct; articolele despre cazuri din categoriile „Unidentified …
   serial killers” intră ca **autor neidentificat** (ex. „Highway of Tears”). Categoria „Spree killers” nu mai
   există pe Wikipedia engleză.
-- Murderpedia: profilurile etichetate „Serial killer” sau „Spree killer” (vezi mai jos).
+- Arborele „Mass murderers” (aceeași regulă: paginile din categorii „… mass murderers …”).
+- Murderpedia: profilurile etichetate „Serial killer”, „Spree killer” sau „Mass murderer” (vezi mai jos).
 
 ### Faza 1 (detalii)
 
@@ -41,10 +50,18 @@ Se ia primul nivel care dă cel puțin un loc rezolvat:
 1. **infobox Wikipedia engleză**, câmpurile fine `locations`, `location`, `cities`, `city`, `states`, `state`, `region`
    (încredere 0,9). Locurile la nivel de țară din aceste câmpuri se ignoră (ex. „Georgia” într-o listă de state SUA
    s-ar rezolva greșit la țara Georgia).
+1a. **articolul evenimentului** legat din introducere („[[Columbine High School massacre]]”, „[[Moors murders]]”):
+   locația lui din Wikidata (P276, apoi P131, apoi coordonatele P625). Doar primul eveniment: celelalte sunt de obicei
+   atacuri pomenite pentru comparație (încredere 0,9).
+1a'. **cronologia Radford** (PDF): locurile din rândurile despre crime, „Oraș, Stat” sau „in/near X”; dacă infobox-ul
+   dă doar 1–2 state, orașele Radford din acele state îl rafinează (încredere 0,8).
 1b. **propozițiile despre crime, în orice limbă și orice secțiune**: linkurile de locuri din propozițiile care conțin
    cuvinte despre crime (murder/killed/victim, crimă/omor/ucis/victimă, Mord/Opfer, meurtre/victime, убий/жертв…),
    excluzând propozițiile despre naștere/copilărie; cele mai frecvente 5 locuri (încredere 0,7).
    Ex.: „Crimele sale s-au desfășurat cu precădere în [[București]]” -> București.
+1b'. **aceleași propoziții din articolele în alte limbi** (până la 4: ru, uk, de, fr, es, it, pl…), doar pentru
+   cazurile semnalate în raportul de verificare din build-ul anterior (încredere 0,65).
+1b''. **textul intrării din listele Wikipedia** („killed 20 travelers on the road from [[Kabul]] to [[Jalalabad]]”).
 1c. **„Location” din Murderpedia**, dacă există și sursele de mai jos sunt singurele disponibile.
 2. **linkurile geografice din introducerea articolului** (engleză, altfel prima limbă disponibilă), fără ce e
    între paranteze, unde multe Wikipedii pun locul nașterii/morții (încredere 0,6).
@@ -115,10 +132,12 @@ sugerează victime sau locul crimei. Fiecare imagine are autorul și licența af
 Metoda (împușcare, înjunghiere, strangulare, otrăvire, lovire, sufocare, incendiere, înec) și tipul victimelor se obțin
 din cuvinte-cheie, deci sunt incomplete și pot avea erori; site-ul o spune explicit lângă filtre.
 
-## Radford/FGCU
+## Radford University
 
-Baza Radford/FGCU nu are pagini publice per persoană; site-ul pune doar un link general către descrierea proiectului.
-Datele pot fi cerute prin email (șablon în PLAN, Anexa B) și, dacă vin, se folosesc doar pentru verificare și statistici.
+Baza Radford/FGCU completă nu e publică, dar cursul Psyc 405 publică „Serial Killer Timelines”: 190 de cronologii PDF
+scrise de studenți (https://maamodt.asp.radford.edu/Psyc%20405/serial_killer_timelines.htm). Fiecare persoană potrivită
+primește link direct la PDF pe fișă; din PDF se extrag doar locurile din rândurile despre crime. Textul nu intră în repo;
+PDF-urile stau în `data/raw/radford/`.
 
 ## Autori neidentificați
 

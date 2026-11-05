@@ -13,8 +13,7 @@ const STYLES = {
   dark: 'https://tiles.openfreemap.org/styles/dark',
 };
 const DATA = '/data';
-const RADFORD_URL =
-  'https://maamodt.asp.radford.edu/serial%20killer%20information%20center/project%20description.htm';
+const RADFORD_URL = 'https://maamodt.asp.radford.edu/Psyc%20405/serial_killer_timelines.htm';
 
 // ------------------------------------------------------------------ tipuri
 
@@ -56,7 +55,7 @@ type EventProps = {
 
 export interface Filters {
   q: string;
-  type: '' | 'serial_killer' | 'spree_killer';
+  type: '' | 'serial_killer' | 'spree_killer' | 'mass_murderer';
   sex: '' | 'male' | 'female';
   from: number | null;
   to: number | null;
@@ -88,6 +87,10 @@ const BASIS_LABEL: Record<string, string> = {
   'wikipedia-list': 'Wikipedia list of serial killers (country only)',
   'wikidata-citizenship': 'citizenship on Wikidata (country only, approximate)',
   murderpedia: 'Murderpedia “Location” field',
+  radford: 'Radford University timeline (crime entries)',
+  'wikipedia-other-languages': 'places linked in sentences about the crimes (Wikipedia in other languages)',
+  'wikipedia-list-text': 'places linked in the Wikipedia list entry',
+  manual: 'manual correction',
   'wikidata-P19': 'Wikidata (place of birth)',
   'wikidata-P20': 'Wikidata (place of death)',
 };
@@ -102,6 +105,10 @@ export const LEGAL_LABEL: Record<string, string> = {
 // culori stabile în ambele teme
 const SEX_COLOR = { male: '#4f7cac', female: '#d08a2e', other: '#8b8f98' };
 const SPREE_COLOR = '#8e4fb3';
+const MASS_COLOR = '#23877d';
+const TYPE_LABEL: Record<string, string> = {
+  serial_killer: 'Serial killer', spree_killer: 'Spree killer', mass_murderer: 'Mass murderer',
+};
 const KIND_COLOR: Record<string, string> = { active_area: '#c0563b', birth: '#3f8f7a', death: '#7a7f8c' };
 
 // ------------------------------------------------------------------ date
@@ -188,7 +195,7 @@ function renderPanel(k: Killer, events: Feature<Point, EventProps>[]): string {
       ${row('Active', k.active ? `${esc(k.active.start)}${k.active.end !== k.active.start ? '–' + esc(k.active.end) : ''}` : '')}
       ${row('Victims', k.victims ? `<strong>${esc(fmtVictims(k.victims))}</strong>${showNote ? ` <span class="muted">“${esc(k.victims!.note)}”</span>` : ''}` : '')}
       ${row('Countries', k.countries.map((c) => `<a href="/country/${esc(c.toLowerCase())}">${esc(c)}</a>`).join(', '))}
-      ${row('Type', (k.type ?? ['serial_killer']).map((t) => t === 'spree_killer' ? 'Spree killer' : 'Serial killer').join(', '))}
+      ${row('Type', (k.type ?? ['serial_killer']).map((t) => TYPE_LABEL[t] ?? t).join(', '))}
       ${row('Classification', k.classification?.length ? esc(k.classification.join(', ')) + ' <span class="muted small">(Murderpedia)</span>' : '')}
       ${row('Method', tags(k.method))}
       ${row('Victims were', tags(k.victim_types))}
@@ -217,8 +224,9 @@ function renderPanel(k: Killer, events: Feature<Point, EventProps>[]): string {
         ${k.links.wikipedia ? `<li><a href="${esc(k.links.wikipedia)}" target="_blank" rel="noopener">Wikipedia</a> <span class="muted small">biography, infobox</span></li>` : ''}
         ${k.links.wikidata ? `<li><a href="${esc(k.links.wikidata)}" target="_blank" rel="noopener">Wikidata ${esc(k.id)}</a> <span class="muted small">dates, places</span></li>` : ''}
         ${mp ? `<li><a href="${esc(mp.url)}" target="_blank" rel="noopener">Murderpedia</a> <span class="muted small">${esc([mp.classification, mp.location].filter(Boolean).join(' · '))}</span></li>` : ''}
-        <li><a href="${RADFORD_URL}" target="_blank" rel="noopener">Radford/FGCU Serial Killer Database</a>
-          <span class="muted small">academic database, not public per person</span></li>
+        ${k.links.radford
+          ? `<li><a href="${esc(k.links.radford)}" target="_blank" rel="noopener">Radford University timeline</a> <span class="muted small">PDF, student-researched chronology</span></li>`
+          : `<li><a href="${RADFORD_URL}" target="_blank" rel="noopener">Radford University serial killer timelines</a> <span class="muted small">no entry for this person</span></li>`}
       </ul>
       ${k.lists.length ? `<p class="muted small">Listed in: ${esc(k.lists.join('; '))}</p>` : ''}
       <p class="muted small"><a href="mailto:?subject=${encodeURIComponent('Correction: ' + k.names.primary + ' (' + k.id + ')')}">Report an error</a></p>
@@ -323,9 +331,10 @@ export function initKillerMap(container: HTMLElement, panel: HTMLElement): MapAp
         'circle-color': ['case', hollow, halo, sexColor],
         'circle-opacity': ['match', ['get', 'precision'], 'country', 0.35, 'admin1', 0.75, 0.95],
         // spree killers: contur violet gros; suspecți/neverificați: inel gol în culoarea sexului
-        'circle-stroke-color': ['case', ['in', 'spree', ['coalesce', ['get', 'type'], '']], SPREE_COLOR,
-          hollow, sexColor, halo],
-        'circle-stroke-width': ['case', ['in', 'spree', ['coalesce', ['get', 'type'], '']], 3.5, hollow, 3, 1.5],
+        'circle-stroke-color': ['case', ['in', 'mass', ['coalesce', ['get', 'type'], '']], MASS_COLOR,
+          ['in', 'spree', ['coalesce', ['get', 'type'], '']], SPREE_COLOR, hollow, sexColor, halo],
+        'circle-stroke-width': ['case', ['in', 'mass', ['coalesce', ['get', 'type'], '']], 3.5,
+          ['in', 'spree', ['coalesce', ['get', 'type'], '']], 3.5, hollow, 3, 1.5],
       },
     });
     map.addLayer({

@@ -26,6 +26,13 @@ log = logging.getLogger(__name__)
 FINE_FIELDS = ["locations", "location", "cities", "city", "states", "state", "region"]
 COUNTRY_FIELDS = ["country", "countries"]
 MAX_AREA_POINTS = 15
+# state dispărute -> statele de azi de pe teritoriul lor (o crimă „în URSS” poate fi în Rusia, Ucraina…)
+SUCCESSORS = {
+    "SU": {"RU", "UA", "BY", "KZ", "UZ", "GE", "AZ", "LT", "MD", "LV", "KG", "TJ", "AM", "TM", "EE"},
+    "YU": {"RS", "HR", "SI", "BA", "MK", "ME", "XK"},
+    "CS": {"CZ", "SK", "RS", "ME"},
+    "DD": {"DE"},
+}
 SEX = {"Q6581097": "male", "Q6581072": "female", "Q2449503": "male", "Q1052281": "female"}
 MANNER = {"Q8454": "executed", "Q10737": "suicide", "Q149086": "killed"}
 SUSPECT_SECTIONS = ("disputed", "unconfirmed", "suspected", "unidentified")
@@ -58,8 +65,14 @@ def collect(refresh: bool = False) -> dict[str, Any]:
         titles.setdefault(lang, set()).update(a["lead_links"])
         titles.setdefault(lang, set()).update(a.get("crime_links", []) + a.get("body_links", [])
                                               + a.get("crime_sentence_links", []))
+        for lang2, ls in (a.get("other_crime_links") or {}).items():
+            titles.setdefault(lang2, set()).update(ls)
     for e in entries:
         titles.setdefault("en", set()).update(n for n in e["country_names"] if not n.startswith("code:"))
+        titles.setdefault("en", set()).update(e.get("text_links", []))
+    radford_by_q = _match_radford(people, articles)
+    for r in radford_by_q.values():
+        titles.setdefault("en", set()).update(r["places"])
     title_qid: dict[str, dict[str, str | None]] = {}
     for lang, ts in titles.items():
         title_qid[lang] = wp.titles_to_qids(lang, sorted(ts))
@@ -71,11 +84,78 @@ def collect(refresh: bool = False) -> dict[str, Any]:
         for prop in ("P19", "P20", "P27", "P551"):
             place_qids.update(p["claims"].get(prop, []))
     place_qids = {q for q in place_qids if re.fullmatch(r"Q\d+", q)}  # fără „unknown value” (genid)
+    # evenimente legate din introducere / propozițiile despre crime („[[Columbine High School massacre]]”)
+    event_q: set[str] = set()
+    for a in articles.values():
+        m = title_qid.get(a["lang"], {})
+        for t in a["lead_links"] + a.get("crime_sentence_links", []):
+            if wp.EVENT_TITLE.search(t):
+                q = m.get(wp.clean_title(t))
+                if q:
+                    event_q.add(q)
+    events = wp.event_info(event_q)
+    for e in events.values():
+        place_qids.update(e["loc"] + e["admin"])
     places = wp.place_info(sorted(place_qids, key=lambda q: int(q[1:])), refresh=False)
     img_path = RAW / "commons" / "images.json"
     images = json.loads(img_path.read_text(encoding="utf-8")) if img_path.exists() else {}
     return {"people": people, "articles": articles, "entries": entries, "title_qid": title_qid, "images": images,
+            "radford": radford_by_q, "events": events,
             "places": places, "by_code": by_code, "countries": country_rows}
+
+
+def _match_radford(people: dict[str, Any], articles: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Cronologiile Radford -> QID, după nume normalizat (etichete Wikidata, alias-uri, titlul articolului)."""
+    from pipeline.normalize import dedupe
+    from pipeline.sources import radford
+    recs = radford.load()
+    if not recs:
+        return {}
+    by_name: dict[str, set[str]] = {}
+    for q, p in people.items():
+        names = [v for k, vals in p["claims"].items() if k.startswith("label:") or k == "alias" for v in vals]
+        if articles.get(q):
+            names.append(articles[q]["title"])
+        for n in names:
+            nn = dedupe.norm(n)
+            if nn:
+                by_name.setdefault(nn, set()).add(q)
+                toks = nn.split()
+                if len(toks) > 2:  # „John Eric Armstrong” -> și „john armstrong”
+                    by_name.setdefault(f"{toks[0]} {toks[-1]}", set()).add(q)
+    from rapidfuzz import fuzz
+    by_surname: dict[str, set[str]] = {}
+    for nn, qs in by_name.items():
+        by_surname.setdefault(nn.split()[-1], set()).update((nn, q) for q in qs)
+    out = {}
+    for r in recs:
+        target = dedupe.norm(r["name"])
+        hits = by_name.get(target, set())
+        if not hits and target:
+            # aceeași familie + prenume asemănător („Judias Buenoano” ~ „Judy Buenoano”); un singur candidat
+            cands = {q for nn, q in by_surname.get(target.split()[-1], set()) if fuzz.token_sort_ratio(nn, target) >= 80}
+            hits = cands
+        if len(hits) == 1:
+            out[next(iter(hits))] = r
+    log.info("Radford: %d din %d cronologii potrivite cu persoane", len(out), len(recs))
+    return out
+
+
+def _ranked(ctx: dict[str, Any], pairs: list[tuple[str, str]], ok) -> list[dict[str, Any]]:
+    """Locurile cele mai des menționate (lang, titlu), din țara dominantă, maxim 5."""
+    counts: Counter[str] = Counter()
+    found: dict[str, dict[str, Any]] = {}
+    for lang, t in pairs:
+        pq = ctx["title_qid"].get(lang, {}).get(wp.clean_title(t))
+        pl = ctx["places"].get(pq) if pq else None
+        if wp.usable(pl) and pl["kind"] not in ("country", "structure") and ok(pl):
+            counts[pl["qid"]] += 1
+            found.setdefault(pl["qid"], pl)
+    if not counts:
+        return []
+    order = list(found)
+    top = _dominant_country(sorted(found, key=lambda q: (-counts[q], order.index(q))), found)[:5]
+    return [found[q] for q in top]
 
 
 # ------------------------------------------------------------------ construire
@@ -125,8 +205,12 @@ def _active_area(ctx: dict[str, Any], person: dict[str, Any], article: dict[str,
         if country_places:
             basis_country, src_country = "wikipedia-infobox", article["source_url"]
 
+    allowed = set(country_isos)
+    for iso in country_isos:
+        allowed |= SUCCESSORS.get(iso, set())
+
     def consistent(p: dict[str, Any]) -> bool:
-        return not country_isos or not p.get("iso2") or p["iso2"] in country_isos
+        return not country_isos or not p.get("iso2") or p["iso2"] in allowed
 
     # 1. infobox: câmpuri fine (orașe, state, locuri)
     if article and article["lang"] == "en":
@@ -138,7 +222,50 @@ def _active_area(ctx: dict[str, Any], person: dict[str, Any], article: dict[str,
                     if p["kind"] != "country" and consistent(p) and p not in fine:
                         fine.append(p)
         if fine:
+            # rafinare: infobox-ul dă doar 1–2 state, iar cronologia Radford numește orașe din ele
+            rad = ctx["radford"].get(person["id"])
+            if rad and len(fine) <= 2 and all(p["kind"] in ("admin1", "region", "admin_other") for p in fine):
+                names = {(p.get("label") or "").lower() for p in fine}
+                cities = _ranked(ctx, [("en", t) for t in rad["places"] if t.split(", ")[-1].lower() in names],
+                                 consistent)
+                if cities:
+                    return cities, "radford", rad["url"]
             return fine[:MAX_AREA_POINTS], "wikipedia-infobox", article["source_url"]
+
+    # 1a'. articolul evenimentului (masacru, atac, serie de crime) legat din introducere/propoziții:
+    #      locația lui din Wikidata (P276 loc, apoi P131 unitate administrativă, apoi coordonatele P625)
+    if article:
+        m = ctx["title_qid"].get(article["lang"], {})
+        ev_places: list[dict[str, Any]] = []
+        for t in article["lead_links"] + article.get("crime_sentence_links", []):
+            if not wp.EVENT_TITLE.search(t):
+                continue
+            ev = ctx["events"].get(m.get(wp.clean_title(t)) or "")
+            if not ev:
+                continue
+            pl = None
+            for cand in ev["loc"] + ev["admin"]:
+                p = ctx["places"].get(cand)
+                if wp.usable(p) and p["kind"] != "country":
+                    pl = p
+                    break
+            if pl is None and ev["coord"]:
+                pl = {"qid": ev["qid"], "label": ev["label"] or t, "lat": ev["coord"][0], "lon": ev["coord"][1],
+                      "country_qid": None, "iso2": None, "kind": "structure", "retrieved_at": _today()}
+            if pl and consistent(pl) and pl not in ev_places:
+                ev_places.append(pl)
+                # doar primul eveniment (cel din introducere, de regulă al persoanei); restul pot fi
+                # atacuri menționate ca termen de comparație („ca la Utøya”)
+                break
+        if ev_places:
+            return ev_places, "wikidata-event", article["source_url"]
+
+    # 1a. cronologia Radford (locurile din rândurile despre crime)
+    rad = ctx["radford"].get(person["id"])
+    if rad:
+        pls = _ranked(ctx, [("en", t) for t in rad["places"]], consistent)
+        if pls:
+            return pls, "radford", rad["url"]
 
     # 1b. linkurile din propozițiile despre crime (orice limbă, orice secțiune); cele mai frecvente, maxim 5
     if article and article.get("crime_sentence_links"):
@@ -155,6 +282,19 @@ def _active_area(ctx: dict[str, Any], person: dict[str, Any], article: dict[str,
             order = list(found)
             top = _dominant_country(sorted(found, key=lambda q: (-counts[q], order.index(q))), found)[:5]
             return [found[q] for q in top], "wikipedia-crime-sentences", article["source_url"]
+
+    # 1c. propozițiile despre crime din articolele în alte limbi (doar pentru locațiile slabe din build-ul anterior)
+    if article and article.get("other_crime_links"):
+        pls = _ranked(ctx, [(l, t) for l, ts in article["other_crime_links"].items() for t in ts], consistent)
+        if pls:
+            return pls, "wikipedia-other-languages", article["source_url"]
+
+    # 1d. linkurile din textul intrării în listele Wikipedia („killed … in [[Kabul]]”)
+    lt = [("en", t) for e in list_entries for t in e.get("text_links", [])]
+    if lt:
+        pls = _ranked(ctx, lt, consistent)
+        if pls:
+            return pls, "wikipedia-list-text", list_entries[0]["source_url"]
 
     # 2. linkurile geografice din introducere
     if article:
@@ -261,10 +401,16 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
     used_places: dict[str, dict[str, Any]] = {}
     slugs: Counter[str] = Counter()
     pending = []
+    # o persoană al cărei articol e articolul comun al unui duo („Eric Harris and Dylan Klebold”)
+    # se contopește în intrarea duo-ului, ca să nu apară de două ori în același loc
+    group_titles = {articles[q]["title"] for q, p in people.items()
+                    if p.get("origin") == "wikipedia-category-group" and articles.get(q)}
     for q in sorted(people, key=lambda x: int(x[1:])):
         p = people[q]
         c = p["claims"]
         art = articles.get(q)
+        if art and art["title"] in group_titles and p.get("origin") != "wikipedia-category-group":
+            continue
         name = names.primary_name(c, art["title"] if art else None)
         if not name:
             name = q
@@ -305,7 +451,8 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
             props = {"id": eid, "killer_id": q, "kind": kind, "date": date, "place_id": rec["id"],
                      "place_name": rec["name"], "precision": rec["precision"], "victim_count": None,
                      "victim_label": None, "confidence": 1.0 if how.startswith("wikidata-P") else
-                     {"wikipedia-infobox": 0.9, "wikipedia-crime-sentences": 0.7, "wikipedia-lead": 0.6, "wikipedia-crime-sections": 0.5,
+                     {"wikipedia-infobox": 0.9, "wikidata-event": 0.9, "radford": 0.8, "wikipedia-crime-sentences": 0.7, "wikipedia-other-languages": 0.65,
+                      "wikipedia-list-text": 0.6, "wikipedia-lead": 0.6, "wikipedia-crime-sections": 0.5,
                       "wikipedia-body": 0.4}.get(how, 0.3),
                      "source_url": src, "source_quote": None, "extraction": how}
             feat = {"type": "Feature", "geometry": {"type": "Point", "coordinates": [lon, lat]}, "properties": props}
@@ -362,13 +509,15 @@ def build(ctx: dict[str, Any]) -> dict[str, Any]:
             if art and art.get("summary") else None,
             "image": image,  # doar Wikimedia Commons (P18) cu licență liberă verificată
             "links": {"wikipedia": art["url"] if art else None, "wikidata": wd_url, "murderpedia": None,
+                      "radford": ctx["radford"][q]["url"] if q in ctx["radford"] else None,
                       "killercloud": None, "serialkillersinfo": None},
             "lists": sorted({e["list"] for e in lentries}),
             "sources": {
                 "identity": "wikidata",
                 "inclusion": {"wikidata-sparql": "wikidata-occupation", "wikipedia-list": "wikipedia-list",
                               "wikipedia-category": "wikipedia-category",
-                              "wikipedia-category-case": "wikipedia-category-case"}.get(p.get("origin"), p.get("origin")),
+                              "wikipedia-category-case": "wikipedia-category-case",
+                              "wikipedia-category-group": "wikipedia-category-group"}.get(p.get("origin"), p.get("origin")),
                 "victims": victims["source"] if victims else None,
                 "method_victim_types": "keywords: wikipedia-categories+infobox" if (meth or vtypes) else None,
                 "image": "wikimedia-commons" if image else None,

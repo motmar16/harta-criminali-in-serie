@@ -1,4 +1,4 @@
-"""Verificare încrucișată: arborele de categorii Wikipedia (engleză) „Serial killers”.
+"""Verificare încrucișată: arborele de categorii Wikipedia (engleză) „Serial killers” și „Mass murderers”.
 
 („Category:Spree killers” nu mai există pe Wikipedia engleză; spree killers vin din Wikidata Q1154323 și Murderpedia.)
 
@@ -19,13 +19,16 @@ from pipeline.sources.mediawiki import api_url
 
 log = logging.getLogger(__name__)
 
-ROOTS = {"Category:Serial killers": "serial_killer"}
-# se rețin doar paginile aflate direct într-o categorie „… serial killers …”, nu în categorii de caz
-# („Zodiac Killer” conține și anchetatori, jurnaliști, filme)
-KEEP_CAT = re.compile(r"serial killers", re.I)
+ROOTS = {"Category:Serial killers": "serial_killer", "Category:Mass murderers": "mass_murderer"}
+# se rețin doar paginile aflate direct într-o categorie „… serial killers …” / „… mass murderers …”, nu în
+# categorii de caz („Zodiac Killer” conține și anchetatori, jurnaliști, filme)
+KEEP_CAT = {"serial_killer": re.compile(r"serial killers", re.I),
+            "mass_murderer": re.compile(r"mass murderers?|mass murderer duos", re.I)}
 SKIP = re.compile(r"fiction|film|television|tv |novel|song|album|video game|comics|play\b|musical|opera|"
                   r"victims?\b|investigat|popular culture|works about|books about|documentar|podcast|"
-                  r"murders? of|massacres|mass shootings|attacks|cases|hoax|in art|characters", re.I)
+                  r"murders? of|massacres|mass shootings|attacks|cases|hoax|in art|characters|"
+                  # violența de stat nu e „mass murderer” în sensul hărții (atacuri individuale)
+                  r"genocide|nazi|holocaust|war crim|einsatzgruppen|khmer|dictator|military|soldiers", re.I)
 MAX_DEPTH = 4
 
 
@@ -55,7 +58,7 @@ def crawl() -> dict[str, dict[str, str]]:
                     if depth < MAX_DEPTH and m["title"] not in seen and not SKIP.search(m["title"]):
                         seen.add(m["title"])
                         frontier.append((m["title"], depth + 1))
-                elif m["ns"] == 0 and KEEP_CAT.search(cat):
+                elif m["ns"] == 0 and KEEP_CAT[kind].search(cat):
                     found.setdefault(m["title"], {"root": kind, "category": cat})
         log.info("%s: %d categorii parcurse, %d pagini până acum", root, len(seen), len(found))
     (RAW / "wikipedia").mkdir(parents=True, exist_ok=True)
@@ -65,4 +68,6 @@ def crawl() -> dict[str, dict[str, str]]:
 
 def load() -> dict[str, dict[str, str]]:
     path = RAW / "wikipedia" / "category_members.json"
+    if path.exists() and '"mass_murderer"' not in path.read_text(encoding="utf-8"):
+        return {}  # cache vechi, doar cu „Serial killers”: se reface
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}

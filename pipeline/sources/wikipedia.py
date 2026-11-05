@@ -13,7 +13,7 @@ from typing import Any
 import mwparserfromhell as mw
 
 from pipeline import http
-from pipeline.config import RAW
+from pipeline.config import DATA, RAW
 from pipeline.sources import mediawiki, wikidata
 
 log = logging.getLogger(__name__)
@@ -243,8 +243,11 @@ def parse_list(page: dict[str, Any]) -> list[dict[str, Any]]:
         if len(cells) >= 2:
             names = _links(mw.parse(cells[0]))
             if names:
+                # linkurile din celelalte coloane (note: „killed … in [[Mar del Plata]]”), fără referințe
+                notes = re.sub(r"<ref[^>]*/>|<ref[^>]*>.*?</ref>", " ", " ".join(cells[2:]), flags=re.S)
                 out.append({"title": names[0], "list": page["title"], "section": h2,
-                            "country_names": _row_country_names(cells[1]), "source_url": src})
+                            "country_names": _row_country_names(cells[1]), "source_url": src,
+                            "text_links": _links(mw.parse(notes))})
 
     for line in txt.split("\n"):
         m = re.match(r"^(=+)\s*(.*?)\s*=+\s*$", line)
@@ -279,8 +282,10 @@ def parse_list(page: dict[str, Any]) -> list[dict[str, Any]]:
             head = line.split(":", 1)[0] if "]]:" in line or "]] :" in line else line[:200]
             names = _links(mw.parse(head))
             if names:
+                rest = re.sub(r"<ref[^>]*/>|<ref[^>]*>.*?</ref>", " ", line, flags=re.S)
                 out.append({"title": names[0], "list": page["title"], "section": h2,
-                            "country_names": [h3] if h3 else [], "source_url": src})
+                            "country_names": [h3] if h3 else [], "source_url": src,
+                            "text_links": [t for t in _links(mw.parse(rest)) if t != names[0]]})
     return out
 
 
@@ -384,20 +389,30 @@ def run(refresh: bool = False) -> None:
             cands[q] = info
     if cands:
         details = wikidata.fetch_details(sorted(cands, key=lambda q: int(q[1:])), refresh=refresh)
-        added = cases = 0
+        added = cases = skipped_military = 0
         for q, p in details.items():
             cat = cands[q]["category"]
+            kind = cands[q].get("root", "serial_killer")
+            if kind == "mass_murderer" and _military(p):
+                skipped_military += 1
+                continue
             if "Q5" in p["claims"].get("P31", []):
-                p["origin"], p["types"] = "wikipedia-category", ["serial_killer"]
+                p["origin"], p["types"] = "wikipedia-category", [kind]
                 p["category"] = cat
                 people[q] = p
                 added += 1
+            elif re.search(r"duos|couples|groups", cat, re.I):
+                # articol comun pentru doi făptași (ex. „Eric Harris and Dylan Klebold”): o singură intrare
+                p["origin"], p["types"], p["category"] = "wikipedia-category-group", [kind], cat
+                people[q] = p
+                cases += 1
             elif "unidentified" in cat.lower():
                 # articol despre un caz cu autor neidentificat (ex. „Highway of Tears”): intră ca neidentificat
                 p["origin"], p["types"], p["category"] = "wikipedia-category-case", ["serial_killer"], cat
                 people[q] = p
                 cases += 1
-        log.info("Categorii Wikipedia: +%d persoane, +%d cazuri cu autor neidentificat", added, cases)
+        log.info("Categorii Wikipedia: +%d persoane, +%d cazuri (autor neidentificat sau duo), "
+                 "%d militari / criminali de război excluși", added, cases, skipped_military)
 
     wikidata.save_people(people)
     (RAW / "wikipedia").mkdir(parents=True, exist_ok=True)
@@ -417,9 +432,43 @@ def run(refresh: bool = False) -> None:
         for q, (l, t) in refs.items():
             if l == lang and pages.get(t) and not pages[t].get("missing"):
                 articles[q] = extract_article(pages[t])
+    # locațiile slabe din build-ul anterior (raportul QA) primesc și articolele în alte limbi
+    # ținta e cumulativă (data/validare/tinte_alte_limbi.txt), ca un caz rezolvat să nu iasă din țintă la rularea
+    # următoare și să revină la locația slabă
+    qa_path = DATA / "validare" / "locatii_de_verificat.csv"
+    tgt_path = DATA / "validare" / "tinte_alte_limbi.txt"
+    targets = set(tgt_path.read_text(encoding="utf-8").split()) if tgt_path.exists() else set()
+    if qa_path.exists():
+        import csv
+        with qa_path.open(encoding="utf-8", newline="") as f:
+            targets |= {r["id"] for r in csv.DictReader(f)}
+    if targets:
+        tgt_path.parent.mkdir(parents=True, exist_ok=True)
+        tgt_path.write_text("\n".join(sorted(targets)) + "\n", encoding="utf-8")
+        for q, by_lang in other_language_links(people, articles, targets, refresh=refresh).items():
+            if q in articles:
+                articles[q]["other_crime_links"] = by_lang
     (RAW / "wikipedia" / "articles.json").write_text(json.dumps(articles, ensure_ascii=False), encoding="utf-8")
     log.info("Wikipedia gata: %d articole extrase (%s)", len(articles),
              ", ".join(f"{l}:{len(t)}" for l, t in sorted(by_lang.items(), key=lambda kv: -len(kv[1]))[:8]))
+
+
+MILITARY_OCC = {"Q189290", "Q47064", "Q4991371", "Q1402561", "Q19934710", "Q11545923", "Q2285706", "Q82955"}
+MILITARY_DESC = re.compile(r"\b(?:general|officer|commander|military|soldier|army|navy|conquistador|warlord|"
+                           r"dictator|politician|admiral|colonel|major|captain|lieutenant|guerrilla|militia|"
+                           r"war criminal|paramilitary|prime minister|president|king|emperor|sultan)\b", re.I)
+KILLER_WORDS = re.compile(r"killer|murderer|shooter|gunman|perpetrator|attacker|stabber|bomber", re.I)
+MILITARY_SS = re.compile(r"\bSS\b")  # Schutzstaffel, cu majuscule (altfel „ss” prinde „Russian”)
+
+
+def _military(p: dict[str, Any]) -> bool:
+    """„Mass murderers” din Wikipedia include și militari / violență de stat; harta vrea atacuri individuale."""
+    desc = " ".join(p["claims"].get("description", []))
+    if KILLER_WORDS.search(desc):  # „spree killer and former soldier”: rămâne
+        return False
+    if set(p["claims"].get("P106", [])) & MILITARY_OCC:
+        return True
+    return bool(MILITARY_DESC.search(desc) or MILITARY_SS.search(desc))
 
 
 def load_articles() -> dict[str, dict[str, Any]]:
@@ -464,6 +513,15 @@ def crime_sentence_links(wikitext: str, limit: int = 120) -> list[str]:
             pass
     text = re.sub(r"<ref[^>]*/>|<ref[^>]*>.*?</ref>", " ", str(code), flags=re.S | re.I)
     text = re.sub(r"^=+.*?=+\s*$", " ", text, flags=re.M)
+    # parantezele (ex. „(12 октября 1946, Тихорецк, …)”) conțin de obicei nașterea/moartea: le scoatem,
+    # protejând linkurile, care pot avea paranteze în titlu
+    store: list[str] = []
+    text = re.sub(r"\[\[[^\[\]]*\]\]", lambda m: f"\x00{store.append(m.group(0)) or len(store) - 1}\x00", text)
+    prev = None
+    while prev != text:
+        prev = text
+        text = re.sub(r"\([^()]*\)", " ", text)
+    text = re.sub(r"\x00(\d+)\x00", lambda m: store[int(m.group(1))], text)
     out: list[str] = []
     for sent in re.split(r"(?<=[.!?。])\s+|\n\n+", text):
         if CRIME_WORDS.search(sent) and not BIRTH_WORDS.search(sent):
@@ -471,3 +529,47 @@ def crime_sentence_links(wikitext: str, limit: int = 120) -> list[str]:
         if len(out) >= limit:
             break
     return out[:limit]
+
+
+# ---------------------------------------------------------------- alte limbi, pentru locațiile slabe
+
+OTHER_LANG_ORDER = ["ru", "uk", "de", "fr", "es", "it", "pl", "pt", "cs", "hu", "ro", "nl", "sv", "fi", "tr", "ja",
+                    "zh", "ko", "be", "kk", "sr", "hr", "bg", "el", "he", "ar", "fa", "id", "ca", "no", "da"]
+
+
+def other_language_links(people: dict[str, dict[str, Any]], articles: dict[str, dict[str, Any]],
+                         targets: set[str], per_person: int = 4, refresh: bool = False) -> dict[str, dict[str, list[str]]]:
+    """Pentru persoanele țintă (locație slabă în raportul QA), linkurile din propozițiile despre crime ale
+    articolelor în alte limbi decât cel principal. -> {qid: {lang: [titluri]}}"""
+    wanted: dict[str, list[tuple[str, str]]] = {}
+    for q in targets:
+        p = people.get(q)
+        if not p:
+            continue
+        main = (articles.get(q) or {}).get("lang")
+        links = {}
+        for s in p["claims"].get("sitelink", []):
+            wiki, title = s.split("|", 1)
+            m = re.match(r"https://([a-z\-]+)\.wikipedia\.org/", wiki)
+            if m:
+                links[m.group(1)] = title
+        chosen = [l for l in OTHER_LANG_ORDER if l in links and l != main][:per_person]
+        wanted[q] = [(l, links[l]) for l in chosen]
+    by_lang: dict[str, list[str]] = {}
+    for pairs in wanted.values():
+        for l, t in pairs:
+            by_lang.setdefault(l, []).append(t)
+    pages: dict[str, dict[str, Any]] = {}
+    for l, ts in by_lang.items():
+        for t, rec in mediawiki.fetch_pages(l, ts, refresh=refresh).items():
+            pages[f"{l}|{t}"] = rec
+    out: dict[str, dict[str, list[str]]] = {}
+    for q, pairs in wanted.items():
+        for l, t in pairs:
+            rec = pages.get(f"{l}|{t}")
+            if rec and rec.get("wikitext"):
+                ls = crime_sentence_links(rec["wikitext"])
+                if ls:
+                    out.setdefault(q, {})[l] = ls
+    log.info("Alte limbi: %d persoane țintă, %d cu linkuri din propoziții despre crime", len(wanted), len(out))
+    return out

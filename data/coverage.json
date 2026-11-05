@@ -1,8 +1,8 @@
 {
   "generated_at": "2026-11-05",
-  "killers_total": 2966,
+  "killers_total": 3893,
   "sources": {
-    "wikidata_sparql_items": 1378,
+    "wikidata_sparql_items": 1447,
     "added_from_wikipedia_lists": 800,
     "wikipedia_list_entries": 3605,
     "wikipedia_list_unique_titles": 1903,
@@ -20,63 +20,70 @@
     ]
   },
   "articles": {
-    "with_any_wikipedia_article": 2628,
-    "with_english_article": 2542
+    "with_any_wikipedia_article": 3116,
+    "with_english_article": 3025
   },
   "active_area": {
-    "with_any_point": 2938,
-    "at_admin1_or_finer": 2789,
-    "pct_at_admin1_or_finer": 94.0,
+    "with_any_point": 3859,
+    "at_admin1_or_finer": 3732,
+    "pct_at_admin1_or_finer": 95.9,
     "by_precision": {
-      "admin1": 1480,
-      "city": 1309,
-      "country": 149,
-      "none": 28
+      "city": 2060,
+      "admin1": 1635,
+      "country": 127,
+      "address": 37,
+      "none": 34
     },
     "by_basis": {
-      "wikipedia-infobox": 1543,
-      "murderpedia": 704,
-      "wikipedia-crime-sentences": 506,
-      "wikipedia-lead": 89,
-      "wikidata-citizenship": 44,
-      "wikipedia-body": 29,
-      "wikipedia-crime-sections": 22,
-      "none": 21,
-      "null": 7,
+      "wikipedia-infobox": 1646,
+      "murderpedia": 1118,
+      "wikipedia-crime-sentences": 580,
+      "wikidata-event": 165,
+      "wikipedia-lead": 120,
+      "wikidata-citizenship": 66,
+      "radford": 50,
+      "wikipedia-other-languages": 49,
+      "wikipedia-body": 32,
+      "none": 25,
+      "wikipedia-crime-sections": 19,
+      "wikipedia-list-text": 13,
+      "null": 9,
       "wikipedia-list": 1
     }
   },
-  "birth_place_geocoded": 1388,
-  "death_place_geocoded": 838,
+  "birth_place_geocoded": 1711,
+  "death_place_geocoded": 1090,
   "legal_status": {
-    "convicted": 2497,
-    "undetermined": 227,
-    "unidentified": 132,
-    "suspected": 53,
-    "deceased_before_trial": 43,
-    "acquitted": 14
+    "convicted": 2997,
+    "undetermined": 496,
+    "deceased_before_trial": 181,
+    "unidentified": 133,
+    "suspected": 58,
+    "acquitted": 28
   },
-  "with_victim_count": 2630,
-  "countries_with_killers": 117,
+  "with_victim_count": 3228,
+  "countries_with_killers": 132,
   "events": {
-    "active_area": 5095,
-    "birth": 1388,
-    "death": 838
+    "active_area": 6226,
+    "birth": 1711,
+    "death": 1090
   },
   "events_layer3_murders": 0,
-  "places": 3613,
-  "with_murderpedia_link": 1358,
+  "places": 4447,
+  "with_murderpedia_link": 1904,
   "by_inclusion": {
-    "wikidata-occupation": 1378,
+    "wikidata-occupation": 1445,
+    "wikipedia-category": 863,
     "wikipedia-list": 800,
-    "wikipedia-category": 432,
-    "murderpedia-serial-killer": 212,
-    "murderpedia-spree-killer": 79,
-    "wikipedia-category-case": 65
+    "murderpedia-mass-murderer": 427,
+    "murderpedia-serial-killer": 210,
+    "murderpedia-spree-killer": 67,
+    "wikipedia-category-case": 65,
+    "wikipedia-category-group": 16
   },
-  "with_photo": 523,
-  "with_method": 1289,
-  "with_victim_types": 2171,
+  "with_photo": 709,
+  "with_method": 1848,
+  "with_victim_types": 2691,
   "not_yet_included": [
     "locațiile individuale ale crimelor (faza 3)"
   ],
@@ -84,21 +91,22 @@
     "profiles": 6886,
     "serial": 852,
     "spree": 150,
-    "matched_serial": 709,
-    "matched_nonserial": 363,
+    "mass": 545,
+    "matched_serial": 840,
+    "matched_nonserial": 364,
     "ambiguous": 2,
-    "matched_total": 1067,
-    "new_serial": 291,
-    "area_upgraded": 420,
-    "ambiguous_pct_of_eligible": 0.2
+    "matched_group": 1,
+    "matched_total": 1200,
+    "new_serial": 704,
+    "area_upgraded": 423,
+    "ambiguous_pct_of_eligible": 0.1
   },
   "location_qa": {
-    "sursa_slaba": 54,
-    "zona_egala_cu_nasterea": 112,
-    "doar_tara": 149,
-    "fara_locatie": 28,
-    "tara_difera_de_murderpedia": 1,
-    "randuri": 341,
+    "zona_egala_cu_nasterea": 118,
+    "sursa_slaba": 56,
+    "doar_tara": 127,
+    "fara_locatie": 34,
+    "randuri": 332,
     "manual_corrections_applied": 0
   }
 }
