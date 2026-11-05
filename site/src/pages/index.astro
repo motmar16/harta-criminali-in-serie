@@ -1,0 +1,13 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="Serial Killer Map">
+  <div id="map" aria-label="World map"></div>
+</Base>
+<style>
+  #map { position: fixed; inset: 0; }
+</style>
+<script>
+  import { createMap } from '../components/Map';
+  createMap(document.getElementById('map') as HTMLElement);
+</script>

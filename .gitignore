@@ -1,0 +1,20 @@
+# cache brut al surselor (principiul 5: HTML/wikitext brut nu intră în repo)
+data/raw/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Node / Astro
+node_modules/
+site/dist/
+site/.astro/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
