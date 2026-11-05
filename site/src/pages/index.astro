@@ -2,51 +2,335 @@
 import Base from '../layouts/Base.astro';
 import { readData, type Coverage } from '../lib/data';
 const coverage = readData<Coverage>('coverage.json');
+
+const METHODS = ['shooting', 'stabbing', 'strangulation', 'poisoning', 'beating', 'suffocation', 'arson', 'drowning'];
+const VICTIMS = ['women', 'men', 'children', 'elderly', 'sex workers', 'patients', 'family', 'travelers', 'homeless'];
+const LEGAL = [
+  ['convicted', 'Convicted'], ['suspected', 'Suspected'], ['unidentified', 'Unidentified'], ['undetermined', 'Not verified'],
+];
+const DECADES = [1800, 1850, 1900, 1920, 1940, 1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020];
 ---
-<Base title="Serial Killer Map — documented cases worldwide">
+<Base title="Serial Killer Map — documented cases worldwide" bodyClass="map-page">
   <header class="topbar">
-    <h1>Serial Killer Map</h1>
-    <p class="muted">
-      {coverage.killers_total.toLocaleString('en')} documented people · data from Wikidata &amp; Wikipedia ·
-      updated {coverage.generated_at} · <a href="/country/">by country</a>
-    </p>
+    <a class="brand" href="/">
+      <span class="mark" aria-hidden="true"></span>
+      <span><strong>Serial Killer Map</strong><small>{coverage.killers_total.toLocaleString('en')} documented people</small></span>
+    </a>
+    <label class="search">
+      <span class="sr">Search by name</span>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="9" cy="9" r="6" /><path d="m14 14 4 4" /></svg>
+      <input id="q" type="search" placeholder="Search by name…" autocomplete="off" />
+    </label>
+    <nav class="actions">
+      <button id="filters-btn" class="btn" type="button" aria-controls="filters" aria-expanded="false">
+        Filters <span id="filter-count" class="badge" hidden></span>
+      </button>
+      <a class="btn ghost hide-sm" href="/country/">Countries</a>
+      <button id="theme-btn" class="btn icon" type="button" aria-label="Switch light / dark theme">
+        <svg class="sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" /><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" /></svg>
+        <svg class="moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" /></svg>
+      </button>
+    </nav>
   </header>
+
+  <aside id="filters" class="card filters" aria-label="Filters"><form autocomplete="off" onsubmit="return false">
+    <div class="filters-head">
+      <h2>Filter</h2>
+      <span id="result-count" class="muted small"></span>
+      <button id="reset" class="link" type="button">Reset</button>
+    </div>
+
+    <fieldset>
+      <legend>Sex</legend>
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="sex" value="" checked /><span>All</span></label>
+        <label><input type="radio" name="sex" value="male" /><span><i class="sw male"></i>Male</span></label>
+        <label><input type="radio" name="sex" value="female" /><span><i class="sw female"></i>Female</span></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Active period</legend>
+      <div class="row2">
+        <select id="from" aria-label="Active from">
+          <option value="">Any start</option>
+          {DECADES.map((d) => <option value={d}>from {d}{d < 1900 ? '' : 's'}</option>)}
+        </select>
+        <select id="to" aria-label="Active until">
+          <option value="">Any end</option>
+          {DECADES.map((d) => <option value={d + 9}>to {d}{d < 1900 ? '' : 's'}</option>)}
+        </select>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Proven victims</legend>
+      <select id="minv" aria-label="Minimum proven victims">
+        <option value="0">Any number</option>
+        <option value="3">3 or more</option>
+        <option value="5">5 or more</option>
+        <option value="10">10 or more</option>
+        <option value="20">20 or more</option>
+        <option value="50">50 or more</option>
+      </select>
+    </fieldset>
+
+    <fieldset>
+      <legend>Victims were</legend>
+      <div class="chips" data-group="vt">
+        {VICTIMS.map((v) => <label class="chip"><input type="checkbox" value={v} /><span>{v}</span></label>)}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Method</legend>
+      <div class="chips" data-group="m">
+        {METHODS.map((v) => <label class="chip"><input type="checkbox" value={v} /><span>{v}</span></label>)}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Legal status</legend>
+      <div class="chips" data-group="legal">
+        {LEGAL.map(([v, l]) => <label class="chip"><input type="checkbox" value={v} /><span>{l}</span></label>)}
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Locations</legend>
+      <label class="check"><input id="cityonly" type="checkbox" /> Only city-level locations</label>
+      <label class="check"><input id="photo" type="checkbox" /> With photo</label>
+      <label class="check"><input id="heat" type="checkbox" /> Show density of activity areas</label>
+    </fieldset>
+
+    <p class="muted small fine">Method and victim tags are derived from keywords in sources and are incomplete.
+      Not every case has them.</p>
+  </form></aside>
+
   <div id="map" aria-label="World map of documented serial killers"></div>
-  <aside id="panel" hidden aria-live="polite">
-    <button class="close" type="button" aria-label="Close panel">×</button>
+
+  <div class="card legend" aria-hidden="true">
+    <span><i class="sw male"></i>Male</span>
+    <span><i class="sw female"></i>Female</span>
+    <span><i class="sw ring"></i>Suspected / not verified</span>
+    <span><i class="sw big"></i>Approximate (state / country)</span>
+  </div>
+
+  <aside id="panel" class="card panel" hidden aria-live="polite">
+    <button class="close" type="button" aria-label="Close panel">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 5l10 10M15 5 5 15" /></svg>
+    </button>
     <div class="panel-body"></div>
   </aside>
+
+  <footer class="credit muted small">
+    Updated {coverage.generated_at}. Facts from Wikidata &amp; Wikipedia, cited per record. Documentary purpose only.
+  </footer>
 </Base>
+
 <style is:global>
+  .map-page { overflow: hidden; }
   #map { position: fixed; inset: 0; }
-  .topbar { position: fixed; z-index: 2; top: 10px; left: 10px; max-width: min(560px, calc(100vw - 70px));
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; box-shadow: 0 1px 6px rgb(0 0 0 / .12); }
-  .topbar h1 { font-size: 17px; margin: 0; letter-spacing: .01em; }
-  .topbar p { margin: 2px 0 0; font-size: 13px; }
-  .muted { color: var(--muted); }
-  .small { font-size: 12px; }
-  #panel { position: fixed; z-index: 3; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); overflow-y: auto;
-    background: var(--panel); border-left: 1px solid var(--line); padding: 18px 20px 28px; box-shadow: -2px 0 10px rgb(0 0 0 / .12); }
-  #panel[hidden] { display: none; }
-  #panel .close { position: sticky; top: 0; float: right; font-size: 22px; line-height: 1; border: 0; background: none; color: var(--fg); cursor: pointer; padding: 4px 8px; }
-  #panel h2 { margin: 0 0 4px; font-size: 21px; }
-  #panel h3 { font-size: 14px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 20px 0 6px; }
-  #panel .desc { margin: 0; color: var(--muted); }
-  #panel .aliases { margin: 4px 0 0; font-size: 13px; }
-  #panel .legal { display: inline-block; margin: 10px 0 4px; padding: 2px 8px; border-radius: 4px; font-size: 13px; background: color-mix(in srgb, var(--accent) 14%, transparent); }
-  #panel .legal.warn { background: color-mix(in srgb, #b8860b 22%, transparent); }
-  #panel dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 10px 0 0; }
-  #panel dt { color: var(--muted); }
-  #panel dd { margin: 0; }
-  #panel .events { padding-left: 18px; margin: 6px 0; }
-  #panel .events li { margin: 4px 0; font-size: 14px; }
-  #panel .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; }
-  #panel .note { font-size: 14px; }
-  #panel .summary { font-size: 14px; }
-  #panel .links { padding-left: 18px; }
-  .maplibregl-popup-content { font: 13px/1.35 system-ui, sans-serif; color: #1d1d1f; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+
+  /* bara de sus */
+  .topbar { position: fixed; z-index: 5; top: 12px; left: 12px; right: 12px; display: flex; align-items: center; gap: 12px;
+    padding: 8px 10px 8px 14px; background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(8px);
+    border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .brand { display: flex; align-items: center; gap: 10px; color: var(--fg); text-decoration: none; min-width: 0; }
+  .brand strong { display: block; font-family: var(--serif); font-size: 18px; line-height: 1.1; }
+  .brand small { display: block; color: var(--muted); font-size: 12px; }
+  .mark { width: 26px; height: 26px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle at 50% 50%, var(--female) 0 22%, transparent 23%), radial-gradient(circle, transparent 0 46%, var(--male) 47% 60%, transparent 61%); }
+  .search { flex: 1; max-width: 420px; margin-left: auto; position: relative; }
+  .search svg { position: absolute; left: 11px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); fill: none; stroke: var(--muted); stroke-width: 1.8; }
+  .search input { width: 100%; padding: 8px 12px 8px 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); }
+  .actions { display: flex; gap: 6px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--fg); cursor: pointer; text-decoration: none; font-size: 14px; white-space: nowrap; }
+  .btn:hover { background: var(--surface-2); }
+  .btn.ghost { border-color: transparent; }
+  .btn.icon { width: 36px; height: 36px; padding: 0; justify-content: center; }
+  .btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+  [data-theme="dark"] .sun, [data-theme="light"] .moon { display: none; }
+  .badge { background: var(--accent); color: var(--surface); border-radius: 999px; font-size: 11px; padding: 0 6px; font-weight: 600; }
+  #filters-btn { display: none; }
+
+  /* filtre */
+  .filters { position: fixed; z-index: 4; top: 80px; left: 12px; bottom: 44px; width: 320px; overflow-y: auto; padding: 14px 16px 16px; }
+  .filters-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .filters-head h2 { margin: 0; font-size: 18px; }
+  .filters-head .link { margin-left: auto; }
+  .link { background: none; border: 0; color: var(--accent); cursor: pointer; padding: 0; font-size: 13px; }
+  fieldset { border: 0; padding: 0; margin: 14px 0 0; }
+  legend { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+  select { width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .seg { display: flex; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .seg label { flex: 1; }
+  .seg input, .chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg span { display: flex; justify-content: center; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 999px; cursor: pointer; font-size: 14px; }
+  .seg input:checked + span { background: var(--surface); box-shadow: 0 1px 3px rgb(0 0 0 / .15); font-weight: 500; }
+  .seg input:focus-visible + span, .chip input:focus-visible + span { outline: 2px solid var(--accent); }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip span { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); cursor: pointer; font-size: 13px; text-transform: capitalize; }
+  .chip input:checked + span { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); }
+  .check { display: flex; gap: 8px; align-items: center; font-size: 14px; margin: 4px 0; cursor: pointer; }
+  .check input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .fine { margin: 16px 0 0; }
+  .sw { display: inline-block; width: 11px; height: 11px; border-radius: 50%; vertical-align: -1px; margin-right: 5px; }
+  .sw.male { background: var(--male); } .sw.female { background: var(--female); }
+  .sw.ring { border: 2.5px solid var(--male); background: var(--surface); }
+  .sw.big { width: 15px; height: 15px; background: color-mix(in srgb, var(--male) 55%, transparent); }
+
+  /* legendă */
+  .legend { position: fixed; z-index: 3; left: 344px; bottom: 44px; display: flex; gap: 14px; flex-wrap: wrap; padding: 7px 12px; font-size: 12.5px; }
+  .credit { position: fixed; z-index: 3; left: 14px; bottom: 12px; margin: 0; max-width: 60vw; }
+
+  /* panou detalii */
+  .panel { position: fixed; z-index: 6; top: 80px; right: 12px; bottom: 44px; width: min(440px, calc(100vw - 24px)); overflow-y: auto; padding: 0 0 20px; }
+  .panel[hidden] { display: none; }
+  .panel .close { position: sticky; top: 10px; float: right; margin: 10px 10px 0 0; z-index: 2; width: 32px; height: 32px; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: grid; place-items: center; }
+  .panel .close svg { width: 14px; height: 14px; stroke: var(--fg); stroke-width: 2; }
+  .panel-body { padding: 0 20px; }
+  .panel-body > p.muted:first-child { padding-top: 18px; }
+  .portrait { margin: 0 -20px 4px; background: var(--surface-2); }
+  .portrait img { display: block; width: 100%; max-height: 300px; object-fit: contain; background: #0b0c0e; border-radius: var(--radius) var(--radius) 0 0; filter: grayscale(.15); }
+  .portrait figcaption { font-size: 11.5px; color: var(--muted); padding: 6px 20px; }
+  .ph { padding-top: 16px; }
+  .ph h2 { margin: 0 40px 2px 0; font-size: 25px; line-height: 1.2; }
+  .ph .desc { margin: 0; color: var(--muted); }
+  .ph .aliases { margin: 6px 0 0; font-size: 13px; color: var(--muted); }
+  .legal { display: inline-block; margin-top: 10px; padding: 3px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 500; background: var(--accent-soft); }
+  .legal.warn { background: var(--warn-soft); color: var(--warn); }
+  .facts { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 16px 0 0; font-size: 14px; }
+  .facts dt { color: var(--muted); }
+  .facts dd { margin: 0; }
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); font-size: 12.5px; margin: 0 2px 3px 0; }
+  .panel h3 { font-size: 15px; margin: 22px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .panel .note { font-size: 14px; margin: 0 0 6px; }
+  .events { list-style: none; padding: 0; margin: 6px 0; }
+  .events li { display: flex; gap: 8px; align-items: flex-start; margin: 7px 0; font-size: 14px; }
+  .events .dot { flex: none; width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; }
+  .summary { font-size: 14.5px; }
+  .sources { padding-left: 18px; margin: 6px 0; font-size: 14px; }
+  .sources li { margin: 4px 0; }
+
+  .maplibregl-ctrl-group { background: var(--surface) !important; border: 1px solid var(--line); box-shadow: var(--shadow) !important; }
+  [data-theme="dark"] .maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1); }
+  .maplibregl-ctrl-bottom-right { bottom: 34px; }
+  .maplibregl-ctrl-attrib { font-size: 11px; }
+  [data-theme="dark"] .maplibregl-ctrl-attrib { background: rgb(24 27 33 / .85); color: var(--muted); }
+  [data-theme="dark"] .maplibregl-ctrl-attrib a { color: var(--muted); }
+  .hover-pop .maplibregl-popup-content { font: 13px/1.35 var(--sans); background: var(--surface); color: var(--fg); border-radius: 8px;
+    box-shadow: var(--shadow); padding: 7px 10px; display: grid; }
+  .hover-pop .maplibregl-popup-content span { color: var(--muted); font-size: 12px; }
+  .hover-pop .maplibregl-popup-tip { display: none; }
+
+  @media (max-width: 1100px) { .legend { display: none; } }
+  @media (max-width: 760px) {
+    .topbar { top: 8px; left: 8px; right: 8px; gap: 8px; flex-wrap: wrap; padding: 8px; }
+    .brand small, .hide-sm { display: none; }
+    .search { order: 3; flex-basis: 100%; max-width: none; }
+    .actions { margin-left: auto; }
+    #filters-btn { display: inline-flex; }
+    .filters { display: none; top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 75vh; border-radius: var(--radius) var(--radius) 0 0; z-index: 7; }
+    body.show-filters .filters { display: block; }
+    .panel { top: auto; left: 0; right: 0; bottom: 0; width: auto; max-height: 62vh; border-radius: var(--radius) var(--radius) 0 0; }
+    .credit { display: none; }
+    .maplibregl-ctrl-bottom-right { bottom: 0; }
+  }
 </style>
+
 <script>
-  import { initKillerMap } from '../components/Map';
-  initKillerMap(document.getElementById('map') as HTMLElement, document.getElementById('panel') as HTMLElement);
+  import { initKillerMap, type Filters } from '../components/Map';
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const app = initKillerMap($('map'), $('panel'));
+  const params = new URLSearchParams(location.search);
+
+  // starea filtrelor e în URL, ca linkurile să fie partajabile
+  const groups = (name: string) =>
+    [...document.querySelectorAll<HTMLInputElement>(`.chips[data-group="${name}"] input`)];
+  function restore(): void {
+    $<HTMLInputElement>('q').value = params.get('q') ?? '';
+    const sex = params.get('sex') ?? '';
+    document.querySelectorAll<HTMLInputElement>('input[name="sex"]').forEach((r) => (r.checked = r.value === sex));
+    $<HTMLSelectElement>('from').value = params.get('from') ?? '';
+    $<HTMLSelectElement>('to').value = params.get('to') ?? '';
+    $<HTMLSelectElement>('minv').value = params.get('minv') ?? '0';
+    for (const g of ['vt', 'm', 'legal']) {
+      const vals = (params.get(g) ?? '').split(',').filter(Boolean);
+      groups(g).forEach((i) => (i.checked = vals.includes(i.value)));
+    }
+    $<HTMLInputElement>('cityonly').checked = params.get('city') === '1';
+    $<HTMLInputElement>('photo').checked = params.get('photo') === '1';
+    $<HTMLInputElement>('heat').checked = params.get('heat') === '1';
+  }
+
+  function read(): Filters {
+    const num = (v: string) => (v === '' ? null : Number(v));
+    const checked = (g: string) => new Set(groups(g).filter((i) => i.checked).map((i) => i.value));
+    return {
+      q: $<HTMLInputElement>('q').value.trim(),
+      sex: (document.querySelector<HTMLInputElement>('input[name="sex"]:checked')?.value ?? '') as Filters['sex'],
+      from: num($<HTMLSelectElement>('from').value),
+      to: num($<HTMLSelectElement>('to').value),
+      minVictims: Number($<HTMLSelectElement>('minv').value) || 0,
+      legal: checked('legal'),
+      methods: checked('m'),
+      victimTypes: checked('vt'),
+      cityOnly: $<HTMLInputElement>('cityonly').checked,
+      withPhoto: $<HTMLInputElement>('photo').checked,
+      country: params.get('c')?.toUpperCase() ?? null,
+    };
+  }
+
+  function apply(): void {
+    const f = read();
+    const n = app.setFilters(f);
+    $('result-count').textContent = `${n.toLocaleString('en')} of ${app.total().toLocaleString('en')} on map`;
+    const active = [f.q, f.sex, f.from, f.to, f.minVictims, f.cityOnly, f.withPhoto].filter(Boolean).length
+      + f.legal.size + f.methods.size + f.victimTypes.size;
+    const badge = $('filter-count');
+    badge.hidden = active === 0;
+    badge.textContent = String(active);
+    const url = new URL(location.href);
+    const set = (k: string, v: string | number | null | boolean) =>
+      v ? url.searchParams.set(k, v === true ? '1' : String(v)) : url.searchParams.delete(k);
+    set('q', f.q); set('sex', f.sex); set('from', f.from); set('to', f.to); set('minv', f.minVictims);
+    set('vt', [...f.victimTypes].join(',')); set('m', [...f.methods].join(',')); set('legal', [...f.legal].join(','));
+    set('city', f.cityOnly); set('photo', f.withPhoto); set('heat', $<HTMLInputElement>('heat').checked);
+    history.replaceState(null, '', url);
+  }
+
+  restore();
+  app.onReady(() => {
+    apply();
+    if ($<HTMLInputElement>('heat').checked) app.setHeatmap(true);
+  });
+  let t: number | undefined;
+  $('q').addEventListener('input', () => { clearTimeout(t); t = window.setTimeout(apply, 150); });
+  $('filters').addEventListener('change', (e) => {
+    if ((e.target as HTMLElement).id === 'heat') app.setHeatmap(($('heat') as HTMLInputElement).checked);
+    apply();
+  });
+  $('reset').addEventListener('click', () => {
+    for (const k of ['q', 'sex', 'from', 'to', 'minv', 'vt', 'm', 'legal', 'city', 'photo', 'heat']) params.delete(k);
+    restore();
+    app.setHeatmap(false);
+    apply();
+  });
+  $('filters-btn').addEventListener('click', () => {
+    const on = document.body.classList.toggle('show-filters');
+    $('filters-btn').setAttribute('aria-expanded', String(on));
+  });
+  $('theme-btn').addEventListener('click', () => {
+    const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    try { localStorage.setItem('theme', next); } catch { /* mod privat */ }
+    app.setTheme(next);
+  });
 </script>
